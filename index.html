@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>KOUOH AR — お香購入証明</title>
+<meta name="description" content="お香をかざすとアバターが出現し、購入証明NFTが発行されます">
+
+<!-- A-Frame + MindAR -->
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+<!-- Stripe -->
+<script src="https://js.stripe.com/v3/"></script>
+
+<!-- Privy -->
+<script src="https://cdn.jsdelivr.net/npm/@privy-io/js-sdk-core@0.0.1/dist/index.umd.js"></script>
+
+<style>
+  /* ==========================================
+     KOUOH Brand Colors
+     --kouoh-gold:   #D4955A  (暖かい金茶)
+     --kouoh-dark:   #2C1A0E  (深い焦げ茶)
+     --kouoh-cream:  #FAF3E8  (和紙クリーム)
+     --kouoh-smoke:  #9E9E8A  (煙のグレー)
+     ========================================== */
+  :root {
+    --kouoh-gold:  #D4955A;
+    --kouoh-dark:  #2C1A0E;
+    --kouoh-cream: #FAF3E8;
+    --kouoh-smoke: #9E9E8A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--kouoh-dark); color: var(--kouoh-cream); font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; overflow: hidden; }
+
+  /* AR Scene */
+  #ar-scene { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+  /* ガイドUI */
+  #guide-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 10; pointer-events: none;
+    background: rgba(44, 26, 14, 0.65);
+    transition: opacity 0.5s;
+  }
+  #guide-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .guide-frame {
+    width: 220px; height: 220px;
+    border: 2px solid var(--kouoh-gold);
+    border-radius: 4px;
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .guide-frame::before, .guide-frame::after {
+    content: ''; position: absolute; width: 24px; height: 24px;
+  }
+  .guide-frame::before { top: -2px; left: -2px; border-top: 3px solid var(--kouoh-gold); border-left: 3px solid var(--kouoh-gold); }
+  .guide-frame::after  { bottom: -2px; right: -2px; border-bottom: 3px solid var(--kouoh-gold); border-right: 3px solid var(--kouoh-gold); }
+
+  .guide-text { font-size: 15px; color: var(--kouoh-cream); letter-spacing: 0.12em; text-align: center; }
+  .guide-sub  { font-size: 12px; color: var(--kouoh-smoke); margin-top: 8px; letter-spacing: 0.06em; }
+
+  /* 購入モーダル — TODO: index.htmlに実装 */
+  /* goshuin-ar-hounou の result-modal をベースにリデザイン */
+  /* カラー変数を --kouoh-* に差し替えるだけでブランド適用 */
+</style>
+</head>
+<body>
+
+<!-- ガイドオーバーレイ -->
+<div id="guide-overlay">
+  <div class="guide-frame"></div>
+  <p class="guide-text">商品パッケージをかざしてください</p>
+  <p class="guide-sub">Hold your phone over the product package</p>
+</div>
+
+<!-- AR Scene -->
+<a-scene
+  id="ar-scene"
+  mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no;"
+  color-space="sRGB"
+  renderer="colorManagement: true; physicallyCorrectLights: true;"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false"
+>
+  <a-assets>
+    <!-- TODO: お香ブランドのアバター3Dモデルに差し替え -->
+    <a-asset-item id="avatar-model" src="./avatar.glb"></a-asset-item>
+    <!-- TODO: お香の香り・雰囲気に合った環境音 -->
+    <!-- <audio id="ambient-sound" src="./ambient.mp3" preload="auto"></audio> -->
+  </a-assets>
+
+  <a-camera></a-camera>
+
+  <!-- ARターゲット: 商品パッケージ認識時 -->
+  <a-entity mindar-image-target="targetIndex: 0">
+
+    <!-- アバター（キャラクター） -->
+    <!-- TODO: position/scale はアバターモデルに合わせて調整 -->
+    <a-gltf-model
+      id="avatar"
+      src="#avatar-model"
+      position="0 0.3 0"
+      scale="0.3 0.3 0.3"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear;"
+      visible="false"
+    ></a-gltf-model>
+
+    <!-- 煙エフェクト (incense-smoke コンポーネント) -->
+    <!-- TODO: goshuin-ar-hounou の incense-smoke.js を流用 -->
+    <!-- <a-entity incense-smoke position="0 0 0"></a-entity> -->
+
+    <!-- 購入ボタン (ARスペース内のプレーン) -->
+    <a-plane
+      id="purchase-btn-plane"
+      position="0 -0.25 0"
+      width="0.6" height="0.15"
+      color="#D4955A"
+      opacity="0.9"
+      class="clickable"
+      event-set__click="visible: false"
+    >
+      <a-text value="このお香を購入する" align="center" color="#FAF3E8" scale="1.2 1.2 1.2" position="0 0 0.01"></a-text>
+    </a-plane>
+
+  </a-entity>
+</a-scene>
+
+<!-- 購入モーダル・NFT受取UI -->
+<!-- TODO: goshuin-ar-hounou の index.html から移植し、カラーを --kouoh-* に変更 -->
+<!--
+  主な差し替え箇所:
+  1. モーダルタイトル: 「ご縁を結ぶ」→「このお香を購入する」
+  2. 説明文: 奉納 → 購入
+  3. 成功画面: 「奉納完了」→「購入完了」
+  4. NFT受取説明: 参拝記録 → 購入記録
+  5. カラー全般: #722F37(朱) → #D4955A(金茶)
+-->
+
+<script>
+// AR Target 検出イベント
+const arScene = document.querySelector('#ar-scene');
+const guideOverlay = document.getElementById('guide-overlay');
+const avatar = document.getElementById('avatar');
+
+arScene.addEventListener('ready', () => {
+  console.log('[KOUOH AR] Scene ready');
+});
+
+// ターゲット検出 → ガイドを隠してアバター表示
+arScene.addEventListener('targetFound', () => {
+  guideOverlay.classList.add('hidden');
+  if (avatar) avatar.setAttribute('visible', 'true');
+  // TODO: 煙エフェクト開始
+  // TODO: 購入ボタン表示
+});
+
+// ターゲットロスト → ガイド再表示
+arScene.addEventListener('targetLost', () => {
+  guideOverlay.classList.remove('hidden');
+  if (avatar) avatar.setAttribute('visible', 'false');
+});
+
+// 購入ボタンクリック → 購入モーダルを表示
+// TODO: goshuin-ar-hounou の openPaymentModal() を移植
+document.getElementById('purchase-btn-plane')?.addEventListener('click', () => {
+  console.log('[KOUOH AR] Purchase button clicked');
+  // openPurchaseModal();
+});
+</script>
+
+</body>
+</html>
