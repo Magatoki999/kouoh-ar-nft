@@ -1,10 +1,5 @@
 {
-  "outputDirectory": ".",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/nft.html",   "dest": "/nft.html" },
-    { "src": "/legal.html", "dest": "/legal.html" },
-    { "src": "/sw.js",      "dest": "/sw.js" },
-    { "src": "/(.*)",       "dest": "/index.html" }
-  ]
+  "version": 2,
+  "cleanUrls": true,
+  "trailingSlash": false
 }

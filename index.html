@@ -1,186 +1,248 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta charset="utf-8">
     <title>香訪 (Kouoh) AR - 香りの記憶</title>
-    
-    <!-- Google Fonts: 和風な明朝体 -->
-    <link href="https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&display=swap" rel="stylesheet">
-    
-    <!-- A-Frame & MindAR -->
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
     
-    <!-- Stripe & Privy -->
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://auth.privy.io/widget.js"></script>
-
     <style>
-        :root {
-            --kouoh-gold: #D4955A;   /* 金茶 */
-            --kouoh-dark: #3d342d;   /* 墨色 */
-            --kouoh-bg: #fdfaf5;     /* 和紙（鳥の子色） */
-            --kouoh-accent: #8e443d;  /* 落ち着いた朱 */
-        }
+      /* --- カメラ全画面 & 背景透過設定 --- */
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent !important; }
+      video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: cover !important; z-index: -1 !important; }
+      .a-canvas { z-index: 1 !important; background: transparent !important; }
+      a-scene .a-enter-vr-button, a-scene .a-enter-ar-button { display: none; }
 
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            font-family: 'Sawarabi Mincho', serif;
-            background-color: var(--kouoh-bg);
-        }
+      :root { --gold: #D4AF37; --dark: #1a1208; }
 
-        /* ローディング画面 */
-        #loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--kouoh-bg); z-index: 2000;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-        }
+      /* スタート画面 */
+      #start-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.9); z-index: 9999;
+        display: flex; justify-content: center; align-items: center; flex-direction: column;
+        color: white; text-align: center; cursor: pointer; font-family: 'Kaisei Decol', serif;
+      }
+      #start-overlay h1 { font-size: 26px; color: var(--gold); letter-spacing: 4px; margin-bottom: 10px; }
 
-        .spinner {
-            width: 40px; height: 40px; border: 3px solid var(--kouoh-gold);
-            border-top: 3px solid transparent; border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
+      /* 保存ボタン */
+      #capture-btn {
+        display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+        z-index: 9998; background: var(--gold); color: #000; 
+        padding: 15px 40px; border-radius: 30px; border: 1px solid #FFF;
+        font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer;
+      }
 
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      /* 結果モーダル */
+      #result-modal {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.98); z-index: 10000;
+        flex-direction: column; align-items: center; overflow-y: auto; padding: 24px 16px 120px;
+      }
+      #result-image { max-width: 90%; max-height: 45vh; border: 2px solid var(--gold); margin-top: 16px;}
 
-        /* AR UI オーバーレイ */
-        .ui-overlay {
-            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; width: 85%; max-width: 400px; text-align: center;
-        }
+      #share-btn { margin-top: 16px; padding: 12px 40px; background: #1DA1F2; color: #fff; font-weight: bold; border: none; border-radius: 25px; cursor: pointer; }
 
-        #status-msg {
-            background: rgba(253, 250, 245, 0.8);
-            padding: 10px; border-radius: 4px; margin-bottom: 15px;
-            color: var(--kouoh-dark); font-size: 0.9rem;
-            border: 1px solid var(--kouoh-gold);
-        }
-
-        .btn-primary {
-            background: var(--kouoh-gold); color: white; border: none;
-            padding: 16px 32px; font-size: 1.1rem; border-radius: 0px; /* 直角で高級感を */
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;
-            width: 100%; letter-spacing: 0.1em;
-            transition: 0.3s;
-        }
-
-        .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
-
-        /* モーダル共通設定 */
-        .modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); display: none; z-index: 3000;
-            align-items: center; justify-content: center;
-        }
-
-        .modal-content {
-            background: var(--kouoh-bg); padding: 30px; width: 85%; max-width: 400px;
-            text-align: center; position: relative; border-top: 5px solid var(--kouoh-gold);
-        }
-
-        #stripe-card-element {
-            padding: 15px; background: white; border: 1px solid #ccc; margin: 20px 0;
-        }
-
-        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; }
+      /* 決済UI */
+      #purchase-section {
+        width: 100%; max-width: 400px; margin-top: 24px;
+        background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.35);
+        border-radius: 16px; padding: 20px 16px; text-align: center; color: white;
+      }
+      #buy-btn { width: 100%; background: var(--gold); border: none; border-radius: 12px; color: #1a1208; font-weight: bold; font-size: 16px; padding: 16px; cursor: pointer; }
+      
+      /* 戻るボタンのボタンスタイル */
+      .back-btn {
+        margin-top: 40px; padding: 12px 60px; border: 1px solid rgba(255,255,255,0.4); 
+        border-radius: 30px; color: white; cursor: pointer; font-size: 14px;
+        background: rgba(255,255,255,0.1);
+      }
     </style>
-</head>
-<body>
-
-    <!-- ローディング画面 -->
-    <div id="loading-overlay">
-        <div class="spinner"></div>
-        <p style="margin-top: 20px; color: var(--kouoh-gold);">香りを読み込んでいます...</p>
-    </div>
-
-    <!-- AR シーン -->
-    <a-scene 
-        mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;" 
-        color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
-        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-        
-        <a-assets>
-            <!-- utsusemi.glb に差し替え -->
-            <a-asset-item id="utsusemiModel" src="assets/models/utsusemi.glb"></a-asset-item>
-        </a-assets>
-
-        <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
-
-        <!-- マーカー検出時の処理 -->
-        <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
-            <!-- イメージキャラクター/アバター -->
-            <a-gltf-model id="avatar" src="#utsusemiModel" 
-                rotation="0 0 0" position="0 -0.2 0.1" scale="0.15 0.15 0.15"
-                animation="property: position; to: 0 -0.15 0.1; dur: 2000; dir: alternate; loop: true">
-            </a-gltf-model>
-            
-            <!-- お香の煙エフェクト（js/components/smoke-effect.js が必要） -->
-            <a-entity incense-smoke position="0 -0.4 0" scale="1 1 1"></a-entity>
-        </a-entity>
-    </a-scene>
-
-    <!-- メインUI -->
-    <div class="ui-overlay">
-        <div id="status-msg">パッケージにかざしてください</div>
-        <button id="mint-start-btn" class="btn-primary" style="display:none;">購入証明NFTを発行する</button>
-    </div>
-
-    <!-- 決済モーダル -->
-    <div id="payment-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closeModal('payment-modal')">&times;</span>
-            <h2 style="color: var(--kouoh-dark); margin-top: 0;">香りの記憶を保存</h2>
-            <p style="font-size: 0.9rem;">クレジットカードで決済後、NFTが発行されます</p>
-            <div id="stripe-card-element"><!-- Stripe Element --></div>
-            <button id="submit-payment-btn" class="btn-primary">決済してNFTを受け取る</button>
-            <div id="payment-error" style="color: red; margin-top: 10px; font-size: 0.8rem;"></div>
-        </div>
-    </div>
-
-    <!-- 成功/完了モーダル -->
-    <div id="result-modal" class="modal">
-        <div class="modal-content">
-            <h2 style="color: var(--kouoh-gold);">発行完了</h2>
-            <p>香りの記憶がブロックチェーンに刻まれました。</p>
-            <div id="tx-link" style="margin: 20px 0; font-size: 0.8rem; word-break: break-all;"></div>
-            <button class="btn-primary" onclick="location.reload()">閉じる</button>
-        </div>
-    </div>
-
-    <!-- ロジックの読み込み -->
-    <script src="js/components/smoke-effect.js"></script> <!-- 煙エフェクト -->
-    <script src="js/app.js"></script>
 
     <script>
-        // 基本的なUI制御イベント
-        const targetEntity = document.querySelector('#ar-target');
-        const mintBtn = document.querySelector('#mint-start-btn');
-        const statusMsg = document.querySelector('#status-msg');
-        const loadingOverlay = document.querySelector('#loading-overlay');
-
-        // MindARの読み込み完了
-        document.querySelector('a-scene').addEventListener('arReady', () => {
-            loadingOverlay.style.display = 'none';
-        });
-
-        // マーカー認識
-        targetEntity.addEventListener("targetFound", event => {
-            statusMsg.innerText = "パッケージを確認しました";
-            mintBtn.style.display = "block";
-        });
-
-        // マーカー消失
-        targetEntity.addEventListener("targetLost", event => {
-            statusMsg.innerText = "パッケージにかざしてください";
-            mintBtn.style.display = "none";
-        });
-
-        function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
+      // 煙エフェクト
+      AFRAME.registerComponent('incense-smoke', {
+        init: function () {
+          this.particles = [];
+          for (let i = 0; i < 25; i++) {
+            const el = document.createElement('a-sphere');
+            el.setAttribute('radius', '0.015');
+            el.setAttribute('material', {shader: 'flat', transparent: true, opacity: 0, color: '#ddd5c8', depthWrite: false});
+            this.el.appendChild(el);
+            this.particles.push({ el, life: Math.random(), speed: Math.random() * 0.002 + 0.001 });
+          }
+        },
+        tick: function (time) {
+          this.particles.forEach(p => {
+            p.life += p.speed; if (p.life > 1) p.life = 0;
+            p.el.setAttribute('position', `${Math.sin(time*0.002 + p.life*10)*0.03} ${p.life*0.8} 0`);
+            const op = p.life < 0.2 ? p.life / 0.2 : (1 - p.life);
+            p.el.setAttribute('material', 'opacity', op * 0.15);
+          });
         }
+      });
+    </script>
+</head>
+<body>
+    <div id="start-overlay" onclick="startExperience()">
+      <h1>香訪 (Kouoh) AR</h1>
+      <p>パッケージにかざすと香りの記憶が蘇ります。<br>画面をタップして開始</p>
+    </div>
+
+    <button id="capture-btn">記憶を保存する</button>
+
+    <div id="result-modal">
+      <h2 style="color:var(--gold); margin:0;">香りの記憶</h2>
+      <img id="result-image" src="">
+      <button id="share-btn" onclick="shareExperience()">SNSで共有する</button>
+
+      <div id="purchase-section">
+        <p style="margin-top:0;">購入証明NFTを発行する</p>
+        <div id="card-element" style="background:rgba(255,255,255,0.07); border:1px solid #D4AF37; border-radius:10px; padding:14px; margin-bottom:14px;"></div>
+        <button id="buy-btn" onclick="doPurchase()">決済して発行する</button>
+      </div>
+      
+      <!-- 【修正】トップへ戻らず、モーダルを閉じるだけに変更 -->
+      <div class="back-btn" onclick="closeResultModal()">戻る</div>
+    </div>
+
+    <a-scene
+      mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
+      color-space="sRGB" 
+      renderer="colorManagement: true; preserveDrawingBuffer: true; alpha: true; antialias: true;"
+      vr-mode-ui="enabled: false" 
+      device-orientation-permission-ui="enabled: false"
+    >
+      <a-assets>
+        <a-asset-item id="utsusemiModel" src="./utsusemi.glb"></a-asset-item>
+        <audio id="ambient-audio" src="./ambient.mp3" preload="auto" loop></audio>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <a-entity id="target0" mindar-image-target="targetIndex: 0">
+        <a-entity id="manifestation" visible="false">
+          <a-gltf-model src="#utsusemiModel" position="0 0 0" rotation="180 90 90" scale="1.2 1.2 1.2" animation-mixer></a-gltf-model>
+          <a-entity incense-smoke position="0 0 0.1" rotation="180 90 90"></a-entity>
+        </a-entity>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      const audio = document.getElementById('ambient-audio');
+      const captureBtn = document.getElementById('capture-btn');
+      const resultModal = document.getElementById('result-modal');
+      const targetEl = document.querySelector('#target0');
+      const manifestationEl = document.querySelector('#manifestation');
+
+      function startExperience() {
+        document.getElementById('start-overlay').style.display = 'none';
+        audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => console.log(e));
+      }
+
+      targetEl.addEventListener('targetFound', () => {
+        manifestationEl.setAttribute('visible', true);
+        captureBtn.style.display = 'block';
+        audio.volume = 0;
+        audio.play();
+        fadeAudio(0.4, 1000); 
+      });
+
+      targetEl.addEventListener('targetLost', () => {
+        captureBtn.style.display = 'none';
+        fadeAudio(0, 1000, () => { audio.pause(); });
+      });
+
+      function fadeAudio(targetVol, duration, callback) {
+        const startVol = audio.volume;
+        const startTime = performance.now();
+        function update() {
+          const now = performance.now();
+          const p = Math.min(1, (now - startTime) / duration);
+          audio.volume = startVol + (targetVol - startVol) * p;
+          if (p < 1) requestAnimationFrame(update);
+          else if (callback) callback();
+        }
+        requestAnimationFrame(update);
+      }
+
+      captureBtn.addEventListener('click', async () => {
+        captureBtn.innerText = "保存中...";
+        const sceneEl = document.querySelector('a-scene');
+        const video = document.querySelector('video');
+        const canvas = sceneEl.canvas;
+        const compositeCanvas = document.createElement('canvas');
+        compositeCanvas.width = canvas.width; compositeCanvas.height = canvas.height;
+        const ctx = compositeCanvas.getContext('2d');
+
+        const ratio = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+        const vw = video.videoWidth * ratio; const vh = video.videoHeight * ratio;
+        ctx.drawImage(video, (canvas.width - vw) / 2, (canvas.height - vh) / 2, vw, vh);
+        
+        sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+        ctx.drawImage(canvas, 0, 0);
+
+        const dataUrl = compositeCanvas.toDataURL('image/jpeg', 0.8);
+        document.getElementById('result-image').src = dataUrl;
+        resultModal.style.display = 'flex';
+        
+        compositeCanvas.toBlob(blob => {
+          window.shareFile = new File([blob], "kouoh_experience.jpg", { type: "image/jpeg" });
+        }, 'image/jpeg');
+
+        initStripe();
+        captureBtn.innerText = "記憶を保存する";
+      });
+
+      // 【新設】モーダルを閉じてAR画面に戻る処理
+      function closeResultModal() {
+        resultModal.style.display = 'none';
+        // 決済ボタンの状態をリセット
+        const buyBtn = document.getElementById('buy-btn');
+        buyBtn.disabled = false;
+        buyBtn.textContent = "決済して発行する";
+      }
+
+      async function shareExperience() {
+        if (navigator.share && window.shareFile) {
+          try {
+            await navigator.share({
+              title: '香訪 (Kouoh) AR',
+              text: 'お香の香りをARで体験しました。 #香訪AR #お香',
+              files: [window.shareFile]
+            });
+          } catch (e) { console.log(e); }
+        } else { alert("画像を長押しして保存してください。"); }
+      }
+
+      let stripe, card;
+      function initStripe() {
+        if (stripe) return;
+        stripe = Stripe('pk_test_51TCWBVB1c7PEb1zFztMExsSXZWRs7LoIIJ0h9k2YZezwtLjLdZ0Gwb8huiX3MoYWLFZmUasyI6SArdHLRZzL7XJW00UaIXWSmW');
+        const elements = stripe.elements();
+        card = elements.create('card', { style: { base: { color: '#fff' } } });
+        card.mount('#card-element');
+      }
+
+      async function doPurchase() {
+        const btn = document.getElementById('buy-btn');
+        btn.disabled = true; btn.textContent = "発行中...";
+        try {
+          const res = await fetch('/api/create-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: 500, scentType: 'utsusemi' })
+          });
+          const data = await res.json();
+          const result = await stripe.confirmCardPayment(data.clientSecret, { payment_method: { card: card } });
+          if (result.error) throw result.error;
+          alert("購入完了！NFTを発行しました。");
+          closeResultModal(); // 完了後もリロードせず閉じる
+        } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "決済して発行する"; }
+      }
     </script>
 </body>
 </html>
