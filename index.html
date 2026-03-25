@@ -4,63 +4,183 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>香訪 (Kouoh) AR - 香りの記憶</title>
-    <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Google Fonts: 和風な明朝体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&display=swap" rel="stylesheet">
+    
     <!-- A-Frame & MindAR -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    
     <!-- Stripe & Privy -->
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://auth.privy.io/widget.js"></script>
+
     <style>
         :root {
-            --kouoh-gold: #D4955A; /* 金茶 */
-            --kouoh-dark: #3d342d; /* 墨色に近い茶 */
-            --kouoh-bg: #fdfaf5;   /* 鳥の子色（和紙） */
+            --kouoh-gold: #D4955A;   /* 金茶 */
+            --kouoh-dark: #3d342d;   /* 墨色 */
+            --kouoh-bg: #fdfaf5;     /* 和紙（鳥の子色） */
+            --kouoh-accent: #8e443d;  /* 落ち着いた朱 */
         }
-        body { background-color: var(--kouoh-bg); font-family: "Sawarabi Mincho", serif; }
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Sawarabi Mincho', serif;
+            background-color: var(--kouoh-bg);
+        }
+
+        /* ローディング画面 */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--kouoh-bg); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+
+        .spinner {
+            width: 40px; height: 40px; border: 3px solid var(--kouoh-gold);
+            border-top: 3px solid transparent; border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* AR UI オーバーレイ */
         .ui-overlay {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 1000; width: 90%; text-align: center;
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; width: 85%; max-width: 400px; text-align: center;
         }
+
+        #status-msg {
+            background: rgba(253, 250, 245, 0.8);
+            padding: 10px; border-radius: 4px; margin-bottom: 15px;
+            color: var(--kouoh-dark); font-size: 0.9rem;
+            border: 1px solid var(--kouoh-gold);
+        }
+
         .btn-primary {
             background: var(--kouoh-gold); color: white; border: none;
-            padding: 15px 30px; font-size: 1.1rem; border-radius: 2px;
+            padding: 16px 32px; font-size: 1.1rem; border-radius: 0px; /* 直角で高級感を */
             box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer;
+            width: 100%; letter-spacing: 0.1em;
+            transition: 0.3s;
         }
+
+        .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
+
+        /* モーダル共通設定 */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); display: none; z-index: 3000;
+            align-items: center; justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--kouoh-bg); padding: 30px; width: 85%; max-width: 400px;
+            text-align: center; position: relative; border-top: 5px solid var(--kouoh-gold);
+        }
+
+        #stripe-card-element {
+            padding: 15px; background: white; border: 1px solid #ccc; margin: 20px 0;
+        }
+
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; }
     </style>
 </head>
 <body>
+
+    <!-- ローディング画面 -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 20px; color: var(--kouoh-gold);">香りを読み込んでいます...</p>
+    </div>
+
     <!-- AR シーン -->
     <a-scene 
-        mindar-image="imageTargetSrc: assets/targets/targets.mind; filterMinCF:0.001; filterBeta:0.01;" 
+        mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;" 
         color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" 
         vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
         
         <a-assets>
-            <!-- 仮のモデルとして oritsuru を流用、後に avatar.glb へ差し替え -->
-            <a-asset-item id="avatarModel" src="https://magatoki999.github.io/goshuin-ar-hounou/assets/models/oritsuru_merrygoround.glb"></a-asset-item>
+            <!-- utsusemi.glb に差し替え -->
+            <a-asset-item id="utsusemiModel" src="assets/models/utsusemi.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse;" raycaster="far: 10000; objects: .clickable"></a-camera>
 
-        <a-entity mindar-image-target="targetIndex: 0">
-            <a-gltf-model src="#avatarModel" rotation="0 0 0" position="0 -0.2 0.1" scale="0.1 0.1 0.1"></a-gltf-model>
-            <!-- 煙エフェクト（components/smoke-effect.js が読み込まれている前提） -->
-            <a-entity incense-smoke position="0 -0.5 0"></a-entity>
+        <!-- マーカー検出時の処理 -->
+        <a-entity id="ar-target" mindar-image-target="targetIndex: 0">
+            <!-- イメージキャラクター/アバター -->
+            <a-gltf-model id="avatar" src="#utsusemiModel" 
+                rotation="0 0 0" position="0 -0.2 0.1" scale="0.15 0.15 0.15"
+                animation="property: position; to: 0 -0.15 0.1; dur: 2000; dir: alternate; loop: true">
+            </a-gltf-model>
+            
+            <!-- お香の煙エフェクト（js/components/smoke-effect.js が必要） -->
+            <a-entity incense-smoke position="0 -0.4 0" scale="1 1 1"></a-entity>
         </a-entity>
     </a-scene>
 
-    <!-- UI レイヤー -->
-    <div class="ui-overlay" id="ui-panel">
-        <div id="status-msg" style="margin-bottom: 10px; color: var(--kouoh-dark);">パッケージをカメラにかざしてください</div>
-        <button id="mint-start-btn" class="btn-primary" style="display:none;">購入証明NFTを受け取る</button>
+    <!-- メインUI -->
+    <div class="ui-overlay">
+        <div id="status-msg">パッケージにかざしてください</div>
+        <button id="mint-start-btn" class="btn-primary" style="display:none;">購入証明NFTを発行する</button>
     </div>
 
-    <!-- 決済モーダル等は goshuin-ar-hounou から移植 -->
-    <div id="payment-modal" class="modal" style="display:none;">
-        <!-- Stripe Element がここにマウントされる -->
+    <!-- 決済モーダル -->
+    <div id="payment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('payment-modal')">&times;</span>
+            <h2 style="color: var(--kouoh-dark); margin-top: 0;">香りの記憶を保存</h2>
+            <p style="font-size: 0.9rem;">クレジットカードで決済後、NFTが発行されます</p>
+            <div id="stripe-card-element"><!-- Stripe Element --></div>
+            <button id="submit-payment-btn" class="btn-primary">決済してNFTを受け取る</button>
+            <div id="payment-error" style="color: red; margin-top: 10px; font-size: 0.8rem;"></div>
+        </div>
     </div>
 
+    <!-- 成功/完了モーダル -->
+    <div id="result-modal" class="modal">
+        <div class="modal-content">
+            <h2 style="color: var(--kouoh-gold);">発行完了</h2>
+            <p>香りの記憶がブロックチェーンに刻まれました。</p>
+            <div id="tx-link" style="margin: 20px 0; font-size: 0.8rem; word-break: break-all;"></div>
+            <button class="btn-primary" onclick="location.reload()">閉じる</button>
+        </div>
+    </div>
+
+    <!-- ロジックの読み込み -->
+    <script src="js/components/smoke-effect.js"></script> <!-- 煙エフェクト -->
     <script src="js/app.js"></script>
+
+    <script>
+        // 基本的なUI制御イベント
+        const targetEntity = document.querySelector('#ar-target');
+        const mintBtn = document.querySelector('#mint-start-btn');
+        const statusMsg = document.querySelector('#status-msg');
+        const loadingOverlay = document.querySelector('#loading-overlay');
+
+        // MindARの読み込み完了
+        document.querySelector('a-scene').addEventListener('arReady', () => {
+            loadingOverlay.style.display = 'none';
+        });
+
+        // マーカー認識
+        targetEntity.addEventListener("targetFound", event => {
+            statusMsg.innerText = "パッケージを確認しました";
+            mintBtn.style.display = "block";
+        });
+
+        // マーカー消失
+        targetEntity.addEventListener("targetLost", event => {
+            statusMsg.innerText = "パッケージにかざしてください";
+            mintBtn.style.display = "none";
+        });
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+    </script>
 </body>
 </html>
