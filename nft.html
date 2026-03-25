@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>御朱印インボイスNFT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0a04; color: #e8e0d0;
+      font-family: 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px 16px;
+    }
+    .card {
+      max-width: 420px; width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(212,175,55,0.3);
+      border-radius: 20px; overflow: hidden;
+    }
+    .nft-image {
+      width: 100%; aspect-ratio: 1;
+      object-fit: cover; display: block;
+      background: #1a1208;
+    }
+    .nft-image.loading {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px;
+    }
+    .info { padding: 24px; }
+    .title {
+      font-family: 'Kaisei Decol', serif;
+      font-size: 18px; color: #D4AF37;
+      letter-spacing: 3px; margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 12px; color: rgba(255,255,255,0.4);
+      letter-spacing: 1px; margin-bottom: 20px;
+    }
+    .attrs { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+    .attr {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px; font-size: 13px;
+    }
+    .attr-label { color: rgba(255,255,255,0.4); }
+    .attr-value { color: #fff; font-weight: 500; }
+    .txid-box {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 10px; padding: 12px;
+      margin-bottom: 20px;
+    }
+    .txid-label { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 2px; margin-bottom: 5px; }
+    .txid-value { font-size: 10px; color: rgba(212,175,55,0.6); word-break: break-all; font-family: monospace; }
+    .etherscan-btn {
+      display: block; width: 100%;
+      background: linear-gradient(135deg, #b8962e, #D4AF37);
+      color: #1a1208; font-weight: bold;
+      font-family: 'Kaisei Decol', serif;
+      font-size: 15px; letter-spacing: 2px;
+      padding: 14px; border-radius: 12px;
+      text-align: center; text-decoration: none;
+      border: none; cursor: pointer;
+    }
+    .loading-msg {
+      text-align: center; padding: 60px 20px;
+      font-size: 14px; color: rgba(255,255,255,0.4);
+    }
+    .error-msg {
+      text-align: center; padding: 60px 20px;
+      font-size: 14px; color: rgba(255,100,100,0.7);
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="loading-msg">🌸 読み込み中...</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const txHash = params.get('tx');
+
+    if (!txHash) {
+      document.getElementById('card').innerHTML = '<div class="error-msg">TXハッシュが指定されていません</div>';
+    } else {
+      fetch(`/api/nft-info?txHash=${txHash}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) throw new Error(data.error);
+
+          const weatherMap = { clear: '☀️ 晴れ', rain: '🌧️ 雨', snow: '❄️ 雪' };
+          const timeMap = { morning: '朝霧', midday: '白日', evening: '黄昏', night: '月明かり' };
+
+          document.getElementById('card').innerHTML = `
+            <img class="nft-image" src="${data.image}" alt="${data.name}">
+            <div class="info">
+              <div class="title">${data.name || '御朱印インボイスNFT'}</div>
+              <div class="subtitle">参拝之証 — Proof of Visit</div>
+              <div class="attrs">
+                <div class="attr">
+                  <span class="attr-label">神社</span>
+                  <span class="attr-value">${data.shrine}</span>
+                </div>
+                <div class="attr">
+                  <span class="attr-label">参拝日</span>
+                  <span class="attr-value">${data.date}</span>
+                </div>
+                <div class="attr">
+                  <span class="attr-label">天気</span>
+                  <span class="attr-value">${weatherMap[data.weather] || data.weather}</span>
+                </div>
+                <div class="attr">
+                  <span class="attr-label">時間帯</span>
+                  <span class="attr-value">${timeMap[data.timeOfDay] || data.timeOfDay}</span>
+                </div>
+                <div class="attr">
+                  <span class="attr-label">ご利益</span>
+                  <span class="attr-value">${data.blessing}</span>
+                </div>
+                ${data.amount > 0 ? `
+                <div class="attr">
+                  <span class="attr-label">奉納金額</span>
+                  <span class="attr-value">¥${Number(data.amount).toLocaleString()}</span>
+                </div>` : ''}
+              </div>
+              <div class="txid-box">
+                <div class="txid-label">NFT 証明 TX</div>
+                <div class="txid-value">${txHash}</div>
+              </div>
+              <a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="etherscan-btn">
+                ブロックチェーンで確認する
+              </a>
+            </div>
+          `;
+        })
+        .catch(err => {
+          document.getElementById('card').innerHTML = `<div class="error-msg">エラー: ${err.message}</div>`;
+        });
+    }
+  </script>
+</body>
+</html>
