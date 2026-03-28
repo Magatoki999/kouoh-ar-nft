@@ -114,7 +114,7 @@
 
     /* ══ 空蝉チャットUI ══ */
     #chat-btn{
-      display:none;position:fixed;bottom:100px;right:18px;z-index:9995;
+      display:none;position:fixed;bottom:24px;right:18px;z-index:9995;
       width:52px;height:52px;border-radius:50%;
       background:rgba(20,12,6,0.88);border:1px solid rgba(212,175,55,0.6);
       box-shadow:0 0 14px rgba(212,175,55,0.25);
@@ -122,14 +122,18 @@
     }
     #chat-btn:active{transform:scale(0.93)}
     #chat-panel{
-      display:none;position:fixed;bottom:164px;right:14px;z-index:9996;
-      width:min(300px, calc(100vw - 28px));
-      background:rgba(16,9,4,0.95);
-      border:1px solid rgba(212,175,55,0.45);border-radius:14px;
+      display:none;position:fixed;
+      bottom:108px;left:0;right:0;   /* capture-btn(bottom:40px+高さ約52px+余白)の上 */
+      max-height:calc(100vh - 180px); /* 上にもはみ出さない */
+      z-index:9996;
+      background:rgba(16,9,4,0.97);
+      border-top:1px solid rgba(212,175,55,0.45);
+      border-radius:16px 16px 0 0;
       flex-direction:column;overflow:hidden;
-      box-shadow:0 6px 28px rgba(0,0,0,0.6);
-      animation:fadeUp 0.2s ease;
+      box-shadow:0 -6px 28px rgba(0,0,0,0.6);
+      animation:slideUp 0.22s ease;
     }
+    @keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
     #chat-panel.open{display:flex}
     #chat-header{
       padding:10px 14px;border-bottom:1px solid rgba(212,175,55,0.2);
@@ -138,9 +142,9 @@
     }
     #chat-close{margin-left:auto;cursor:pointer;opacity:0.5;font-size:16px;line-height:1}
     #chat-messages{
-      flex:1;overflow-y:auto;padding:12px;
-      font-size:13px;color:#e0d0b8;line-height:1.65;
-      min-height:160px;max-height:260px;
+      flex:1;overflow-y:auto;padding:14px 16px;
+      font-size:14px;color:#e0d0b8;line-height:1.7;
+      min-height:200px;max-height:calc(100vh - 300px);
     }
     .cm-ai{margin-bottom:12px}
     .cm-ai-name{font-size:10px;color:rgba(212,175,55,0.55);letter-spacing:1px;margin-bottom:3px}
@@ -832,11 +836,14 @@
   function toggleChat() {
     chatOpen = !chatOpen;
     var panel = document.getElementById('chat-panel');
+    var btn   = document.getElementById('chat-btn');
     if (chatOpen) {
       panel.classList.add('open');
-      document.getElementById('chat-input').focus();
+      btn.style.display = 'none';       // パネル表示中はボタンを隠す
     } else {
       panel.classList.remove('open');
+      btn.style.display = 'block';      // パネルを閉じたらボタンを戻す
+      document.getElementById('chat-input').blur();
     }
   }
 
