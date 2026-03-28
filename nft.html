@@ -1,200 +1,266 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>購入証明NFT — 香訪 (Kouoh) AR</title>
-  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&family=Noto+Sans+JP:wght@300;400&display=swap" rel="stylesheet">
+  <title>香訪 NFT — 香りの記憶</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0d0a04; color: #e8e0d0;
-      font-family: 'Noto Sans JP', sans-serif;
-      min-height: 100vh;
-      display: flex; align-items: flex-start; justify-content: center;
-      padding: 32px 16px 60px;
+    :root { --gold:#D4AF37; --dark:#0d0900; --dim:rgba(255,255,255,0.45); }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:var(--dark); color:#e8d8c0; font-family:'Kaisei Decol',serif;
+      min-height:100%; overflow-x:hidden; }
+
+    #page-header{
+      text-align:center; padding:32px 20px 20px;
+      border-bottom:1px solid rgba(212,175,55,0.2);
     }
-    .card {
-      max-width: 440px; width: 100%;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(212,175,55,0.3);
-      border-radius: 20px; overflow: hidden;
+    #page-header h1{ font-size:22px; color:var(--gold); letter-spacing:6px; margin-bottom:6px; }
+    #page-header p{ font-size:12px; color:var(--dim); letter-spacing:1px; }
+
+    #tabs{
+      display:flex; border-bottom:1px solid rgba(212,175,55,0.2);
+      position:sticky; top:0; background:var(--dark); z-index:10;
+    }
+    .tab{
+      flex:1; padding:14px 8px; text-align:center; font-size:13px;
+      color:rgba(255,255,255,0.4); cursor:pointer; letter-spacing:1px;
+      border-bottom:2px solid transparent; transition:all 0.2s;
+    }
+    .tab.active{ color:var(--gold); border-bottom-color:var(--gold); }
+
+    .panel{ display:none; padding:20px 16px 100px; max-width:480px; margin:0 auto; }
+    .panel.active{ display:block; }
+
+    /* NFT */
+    .nft-card{
+      background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.3);
+      border-radius:16px; padding:20px; margin-bottom:16px;
+    }
+    .nft-card-title{ font-size:11px; color:rgba(212,175,55,0.6); letter-spacing:2px; margin-bottom:12px; }
+    .nft-status{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .nft-badge{
+      background:linear-gradient(135deg,#1a3a5c,#2a5a8c);
+      border:1px solid rgba(100,160,220,0.4); border-radius:20px;
+      padding:5px 14px; font-size:12px; color:#a0d0ff; letter-spacing:1px;
+    }
+    .nft-attr{ margin-bottom:10px; }
+    .nft-attr-label{ font-size:10px; color:var(--dim); letter-spacing:1px; margin-bottom:3px; }
+    .nft-attr-value{ font-size:14px; color:#e8d8c0; word-break:break-all; }
+    .nft-attr-value.mono{ font-family:monospace; font-size:11px; color:rgba(255,255,255,0.45); }
+    .etherscan-link{
+      display:block; margin-top:16px; padding:13px; text-align:center;
+      background:rgba(100,160,220,0.1); border:1px solid rgba(100,160,220,0.3);
+      border-radius:10px; color:#a0d0ff; font-size:13px; text-decoration:none; letter-spacing:1px;
+    }
+    .status-msg{
+      text-align:center; padding:40px 20px; line-height:2; font-size:13px; color:var(--dim);
+    }
+    /* 記憶帳 */
+    .memory-empty{ text-align:center; color:var(--dim); font-size:13px; padding:40px 20px; line-height:2; }
+    .memory-count{ font-size:11px; color:rgba(212,175,55,0.5); letter-spacing:1px; margin-bottom:14px; }
+    .memory-card{
+      background:rgba(255,255,255,0.03); border:1px solid rgba(212,175,55,0.2);
+      border-radius:14px; overflow:hidden; margin-bottom:16px;
+    }
+    .memory-card.purchased{ border-color:rgba(212,175,55,0.55); }
+    .memory-img{ width:100%; aspect-ratio:16/9; object-fit:cover; display:block; }
+    .memory-body{ padding:12px 14px; }
+    .memory-meta{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      font-size:11px; color:var(--dim); margin-bottom:8px;
+    }
+    .memory-date{ margin-left:auto; color:rgba(255,255,255,0.25); }
+    .memory-purchased-badge{
+      font-size:10px; color:rgba(212,175,55,0.8);
+      border:1px solid rgba(212,175,55,0.4); border-radius:10px; padding:2px 8px;
+    }
+    .memory-line{
+      font-size:13px; color:#c8b888; line-height:1.7;
+      border-left:2px solid rgba(212,175,55,0.3); padding-left:10px;
+      font-style:italic; margin-bottom:8px;
+    }
+    .memory-line.empty{ color:rgba(255,255,255,0.2); font-style:normal; }
+    .memory-nft-link{
+      font-size:11px; color:rgba(212,175,55,0.6);
+      text-decoration:underline; letter-spacing:1px;
     }
 
-    /* NFT画像 */
-    .nft-image {
-      width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
-      background: #1a1208;
+    #back-btn{
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      padding:12px 48px; border:1px solid rgba(255,255,255,0.25); border-radius:30px;
+      color:rgba(255,255,255,0.6); background:rgba(255,255,255,0.06);
+      font-size:13px; cursor:pointer; letter-spacing:1px;
+      font-family:'Kaisei Decol',serif; white-space:nowrap;
     }
 
-    /* ヘッダ */
-    .card-header {
-      padding: 20px 20px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      padding-bottom: 16px;
-    }
-    .nft-title {
-      font-family: 'Kaisei Decol', serif;
-      font-size: 16px; color: #D4AF37; letter-spacing: 3px; margin-bottom: 3px;
-    }
-    .nft-subtitle {
-      font-size: 11px; color: rgba(255,255,255,0.35); letter-spacing: 2px;
-    }
-
-    /* 属性リスト */
-    .info { padding: 16px 20px 20px; }
-    .section-label {
-      font-size: 10px; color: rgba(212,175,55,0.5);
-      letter-spacing: 3px; margin: 14px 0 8px;
-    }
-    .attrs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-    .attr {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 14px;
-      background: rgba(255,255,255,0.04); border-radius: 8px; font-size: 13px;
-    }
-    .attr-label { color: rgba(255,255,255,0.4); }
-    .attr-value { color: #fff; font-weight: 500; text-align: right; max-width: 60%; }
-    .attr-value.gold { color: #D4AF37; }
-    .attr-value.mono { font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.5); word-break: break-all; }
-
-    /* TX */
-    .txid-box {
-      background: rgba(0,0,0,0.3); border: 1px solid rgba(212,175,55,0.2);
-      border-radius: 10px; padding: 12px; margin-bottom: 16px;
-    }
-    .txid-label { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 2px; margin-bottom: 5px; }
-    .txid-value { font-size: 10px; color: rgba(212,175,55,0.6); word-break: break-all; font-family: monospace; }
-
-    /* ボタン */
-    .etherscan-btn {
-      display: block; width: 100%;
-      background: linear-gradient(135deg, #b8962e, #D4AF37);
-      color: #1a1208; font-weight: bold;
-      font-family: 'Kaisei Decol', serif; font-size: 14px; letter-spacing: 2px;
-      padding: 14px; border-radius: 12px;
-      text-align: center; text-decoration: none; margin-bottom: 10px;
-    }
-    .back-btn {
-      display: block; width: 100%; padding: 12px;
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; color: rgba(255,255,255,0.4);
-      font-size: 13px; text-align: center; text-decoration: none; cursor: pointer;
-    }
-
-    /* ステート */
-    .loading-msg { text-align: center; padding: 60px 20px; font-size: 14px; color: rgba(255,255,255,0.4); }
-    .error-msg   { text-align: center; padding: 60px 20px; font-size: 14px; color: rgba(255,100,100,0.7); }
-
-    /* ローディングスピナー */
-    .spinner {
-      width: 32px; height: 32px; margin: 0 auto 12px;
-      border: 2px solid rgba(212,175,55,0.2); border-top-color: #D4AF37;
-      border-radius: 50%; animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn{ from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    .fadein{ animation:fadeIn 0.4s ease; }
   </style>
 </head>
 <body>
-  <div class="card" id="card">
-    <div class="loading-msg">
-      <div class="spinner"></div>
-      購入記録を読み込んでいます…
-    </div>
+
+<div id="page-header">
+  <h1>香訪 (Kouoh)</h1>
+  <p>購入証明 NFT ＆ 香りの記憶帳</p>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="switchTab('nft')">🪙 NFT証明</div>
+  <div class="tab"        onclick="switchTab('memory')">📖 記憶帳</div>
+</div>
+
+<div id="panel-nft" class="panel active">
+  <div id="nft-info-area">
+    <div class="status-msg">読み込み中…</div>
   </div>
+</div>
 
-  <script>
-    const params  = new URLSearchParams(location.search);
-    const txHash  = params.get('tx');
+<div id="panel-memory" class="panel">
+  <div id="memory-area"></div>
+</div>
 
-    if (!txHash) {
-      document.getElementById('card').innerHTML =
-        '<div class="error-msg">TXハッシュが指定されていません</div>';
-    } else {
-      fetch(`/api/nft-info?txHash=${encodeURIComponent(txHash)}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.error) throw new Error(data.error);
-          renderCard(data, txHash);
-        })
-        .catch(err => {
-          document.getElementById('card').innerHTML =
-            `<div class="error-msg">エラー: ${err.message}</div>`;
-        });
+<button id="back-btn" onclick="history.back()">← 戻る</button>
+
+<script>
+var MEMORY_KEY    = 'kouoh_memories';
+var SEASON_JP     = { spring:'春', summer:'夏', autumn:'秋', winter:'冬' };
+var WEATHER_JP    = { clear:'晴れ', rain:'雨', snow:'雪' };
+var TIME_JP       = { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' };
+var SEASON_EMOJI  = { spring:'🌸', summer:'🌿', autumn:'🍂', winter:'❄️' };
+var WEATHER_EMOJI = { clear:'☀️', rain:'🌧️', snow:'❄️' };
+var TIME_EMOJI    = { morning:'🌅', midday:'☀️', evening:'🌆', night:'🌙' };
+
+function escH(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ── タブ切替 ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', ['nft','memory'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(function(p) {
+    p.classList.remove('active');
+  });
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'memory') renderMemories();
+}
+
+// ── URL ──
+var txHash = new URLSearchParams(location.search).get('tx') || '';
+
+// ── LocalStorage ──
+function loadMemories() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]'); } catch(e) { return []; }
+}
+
+// ── NFT情報取得 ──
+(function() {
+  var area = document.getElementById('nft-info-area');
+
+  if (!txHash) {
+    area.innerHTML = '<div class="status-msg">URLに <strong>?tx=トランザクションID</strong> が必要です。<br>'
+      + '<span style="font-size:11px">メールに記載されたリンクからアクセスしてください。</span></div>';
+    return;
+  }
+
+  fetch('/api/nft-info?txHash=' + encodeURIComponent(txHash))  // ← txHash に修正
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) {
+        area.innerHTML = '<div class="status-msg">エラー：' + escH(d.error) + '</div>';
+        return;
+      }
+      renderNFT(d);
+    })
+    .catch(function(err) {
+      area.innerHTML = '<div class="status-msg">通信エラー：' + escH(String(err)) + '</div>';
+    });
+})();
+
+function renderNFT(d) {
+  var area = document.getElementById('nft-info-area');
+
+  // nft-info.js の実際のレスポンスフィールドに合わせる
+  // { tokenId, txHash, image, name, shrine, date, weather, timeOfDay, blessing, lang, amount }
+  var TIME_LABEL    = { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' };
+  var WEATHER_LABEL = { clear:'晴れ', rain:'雨', snow:'雪' };
+
+  var html = '<div class="nft-card fadein">'
+    + '<div class="nft-card-title">購入証明 NFT</div>'
+    + '<div class="nft-status">'
+    + '<div class="nft-badge">✦ 発行済み</div>'
+    + (d.tokenId ? '<span style="font-size:11px;color:rgba(255,255,255,0.3)">#' + escH(String(d.tokenId)) + '</span>' : '')
+    + '</div>';
+
+  [
+    ['商品名',   d.name],
+    ['店舗',    d.shrine],
+    ['購入日',   d.date],
+    ['天気',    WEATHER_LABEL[d.weather] || d.weather],
+    ['時間帯',   TIME_LABEL[d.timeOfDay] || d.timeOfDay],
+    ['祝福の言葉', d.blessing],
+    ['金額',    d.amount ? '¥' + Number(d.amount).toLocaleString() + '（税込）' : ''],
+  ].forEach(function(a) {
+    if (!a[1]) return;
+    html += '<div class="nft-attr"><div class="nft-attr-label">' + a[0] + '</div>'
+      + '<div class="nft-attr-value">' + escH(a[1]) + '</div></div>';
+  });
+
+  html += '<div class="nft-attr"><div class="nft-attr-label">TX HASH</div>'
+    + '<div class="nft-attr-value mono">' + escH(txHash) + '</div></div>';
+
+  html += '<a class="etherscan-link" href="https://sepolia.etherscan.io/tx/'
+    + encodeURIComponent(txHash) + '" target="_blank">Etherscan で確認する →</a>';
+  html += '</div>';
+
+  if (d.image) {
+    html += '<div class="nft-card fadein" style="padding:0;overflow:hidden">'
+      + '<img src="' + escH(d.image) + '" style="width:100%;display:block;" alt="NFT画像"></div>';
+  }
+
+  area.innerHTML = html;
+}
+
+// ── 記憶帳 ──
+function renderMemories() {
+  var area = document.getElementById('memory-area');
+  var list = loadMemories();
+
+  if (list.length === 0) {
+    area.innerHTML = '<div class="memory-empty">まだ記憶がございません。<br>'
+      + 'ARで空蝉と出会い、<br>「香りの記憶を残す」ボタンを押してください。</div>';
+    return;
+  }
+
+  var html = '<div class="memory-count">記憶 ' + list.length + ' 件（最新5件）</div>';
+  list.forEach(function(m) {
+    var hasTxid = !!m.txid;
+    html += '<div class="memory-card' + (hasTxid ? ' purchased' : '') + ' fadein">';
+    if (m.imageDataUrl) {
+      html += '<img class="memory-img" src="' + m.imageDataUrl + '" alt="記憶の断片">';
     }
+    html += '<div class="memory-body"><div class="memory-meta">'
+      + '<span>' + (SEASON_EMOJI[m.season]  || '🌸') + ' ' + (SEASON_JP[m.season]  || '') + '</span>'
+      + '<span>' + (WEATHER_EMOJI[m.weather]|| '☀️') + ' ' + (WEATHER_JP[m.weather]|| '') + '</span>'
+      + '<span>' + (TIME_EMOJI[m.timeOfDay] || '☀️') + ' ' + (TIME_JP[m.timeOfDay] || '') + '</span>'
+      + (hasTxid ? '<span class="memory-purchased-badge">🌿 購入済</span>' : '')
+      + '<span class="memory-date">' + escH(m.date || '') + '</span>'
+      + '</div>';
 
-    function renderCard(d, tx) {
-      const amountStr = d.amount
-        ? `¥${Number(d.amount).toLocaleString()}（税込）`
-        : '—';
-      const qtyStr = d.quantity ? `${d.quantity} 個` : '—';
+    html += m.utsusemiLine
+      ? '<div class="memory-line">「' + escH(m.utsusemiLine) + '」</div>'
+      : '<div class="memory-line empty">— 空蝉との会話なし</div>';
 
-      document.getElementById('card').innerHTML = `
-        <img class="nft-image" src="${d.image || ''}" alt="${d.product || 'KOUOH NFT'}">
-
-        <div class="card-header">
-          <div class="nft-title">購入証明 NFT</div>
-          <div class="nft-subtitle">KOUOH Purchase Certificate — Proof of Purchase</div>
-        </div>
-
-        <div class="info">
-          <div class="section-label">購入情報</div>
-          <div class="attrs">
-            <div class="attr">
-              <span class="attr-label">商品名</span>
-              <span class="attr-value">${d.product || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">シリーズ</span>
-              <span class="attr-value">${d.series || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">香り</span>
-              <span class="attr-value">${d.scent || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">購入店舗</span>
-              <span class="attr-value">${d.storeName || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">購入日</span>
-              <span class="attr-value">${d.date || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">数量</span>
-              <span class="attr-value gold">${qtyStr}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">お支払い金額</span>
-              <span class="attr-value gold">${amountStr}</span>
-            </div>
-          </div>
-
-          <div class="section-label">証明情報</div>
-          <div class="attrs">
-            <div class="attr">
-              <span class="attr-label">証明 ID</span>
-              <span class="attr-value mono">${d.certId || '—'}</span>
-            </div>
-            <div class="attr">
-              <span class="attr-label">Token ID</span>
-              <span class="attr-value mono">#${d.tokenId || '—'}</span>
-            </div>
-          </div>
-
-          <div class="section-label">ブロックチェーン記録</div>
-          <div class="txid-box">
-            <div class="txid-label">NFT MINT TX</div>
-            <div class="txid-value">${tx}</div>
-          </div>
-
-          <a href="https://sepolia.etherscan.io/tx/${tx}" target="_blank" class="etherscan-btn">
-            Etherscan で確認する →
-          </a>
-          <a href="/" class="back-btn">香訪 AR に戻る</a>
-        </div>
-      `;
+    if (hasTxid) {
+      html += '<a class="memory-nft-link" href="/nft.html?tx=' + encodeURIComponent(m.txid) + '">NFT証明を見る →</a>';
     }
-  </script>
+    html += '</div></div>';
+  });
+  area.innerHTML = html;
+}
+</script>
 </body>
 </html>
