@@ -111,6 +111,71 @@
     .k-loading-text{font-family:'Kaisei Decol',serif;font-size:14px;color:var(--gold);letter-spacing:3px}
     .back-btn{margin-top:36px;padding:12px 60px;border:1px solid rgba(255,255,255,0.3);border-radius:30px;color:#fff;cursor:pointer;font-size:14px;background:rgba(255,255,255,0.07)}
     @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+    /* ══ 空蝉チャットUI ══ */
+    #chat-btn{
+      display:none;position:fixed;bottom:100px;right:18px;z-index:9995;
+      width:52px;height:52px;border-radius:50%;
+      background:rgba(20,12,6,0.88);border:1px solid rgba(212,175,55,0.6);
+      box-shadow:0 0 14px rgba(212,175,55,0.25);
+      font-size:22px;cursor:pointer;transition:transform 0.15s;
+    }
+    #chat-btn:active{transform:scale(0.93)}
+    #chat-panel{
+      display:none;position:fixed;bottom:164px;right:14px;z-index:9996;
+      width:min(300px, calc(100vw - 28px));
+      background:rgba(16,9,4,0.95);
+      border:1px solid rgba(212,175,55,0.45);border-radius:14px;
+      flex-direction:column;overflow:hidden;
+      box-shadow:0 6px 28px rgba(0,0,0,0.6);
+      animation:fadeUp 0.2s ease;
+    }
+    #chat-panel.open{display:flex}
+    #chat-header{
+      padding:10px 14px;border-bottom:1px solid rgba(212,175,55,0.2);
+      display:flex;align-items:center;gap:8px;
+      font-family:'Kaisei Decol',serif;font-size:13px;color:var(--gold);
+    }
+    #chat-close{margin-left:auto;cursor:pointer;opacity:0.5;font-size:16px;line-height:1}
+    #chat-messages{
+      flex:1;overflow-y:auto;padding:12px;
+      font-size:13px;color:#e0d0b8;line-height:1.65;
+      min-height:160px;max-height:260px;
+    }
+    .cm-ai{margin-bottom:12px}
+    .cm-ai-name{font-size:10px;color:rgba(212,175,55,0.55);letter-spacing:1px;margin-bottom:3px}
+    .cm-user{margin-bottom:12px;text-align:right}
+    .cm-user span{
+      display:inline-block;background:rgba(212,175,55,0.18);
+      border:1px solid rgba(212,175,55,0.25);
+      border-radius:10px 10px 2px 10px;
+      padding:6px 10px;max-width:85%;text-align:left;
+    }
+    .cm-dots span{
+      display:inline-block;width:5px;height:5px;border-radius:50%;
+      background:rgba(212,175,55,0.5);margin:0 2px;
+      animation:dot-bounce 1.2s ease-in-out infinite;
+    }
+    .cm-dots span:nth-child(2){animation-delay:0.2s}
+    .cm-dots span:nth-child(3){animation-delay:0.4s}
+    @keyframes dot-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+    #chat-footer{
+      padding:8px;border-top:1px solid rgba(212,175,55,0.15);
+      display:flex;gap:6px;align-items:center;
+    }
+    #chat-input{
+      flex:1;background:rgba(255,255,255,0.07);
+      border:1px solid rgba(212,175,55,0.3);border-radius:8px;
+      padding:8px 10px;color:#e8d8c0;font-size:13px;outline:none;
+      font-family:'Kaisei Decol',serif;
+    }
+    #chat-input:focus{border-color:rgba(212,175,55,0.6)}
+    #chat-send{
+      background:rgba(139,105,20,0.7);border:1px solid rgba(212,175,55,0.4);
+      border-radius:8px;padding:8px 12px;color:#fff;cursor:pointer;
+      font-family:'Kaisei Decol',serif;font-size:13px;white-space:nowrap;
+    }
+    #chat-send:active{background:var(--gold);color:var(--dark)}
   </style>
 </head>
 <body>
@@ -127,6 +192,28 @@
 </div>
 
 <button id="capture-btn">香りの記憶を残す</button>
+
+<!-- ══ 空蝉チャットボタン（AR認識後に表示） ══ -->
+<button id="chat-btn" onclick="toggleChat()" title="空蝉に話しかける">🪔</button>
+
+<!-- ══ 空蝉チャットパネル ══ -->
+<div id="chat-panel">
+  <div id="chat-header">
+    <span>🌿</span><span>空蝉（うつせみ）</span>
+    <span id="chat-close" onclick="toggleChat()">✕</span>
+  </div>
+  <div id="chat-messages">
+    <div class="cm-ai">
+      <div class="cm-ai-name">空蝉</div>
+      <div id="chat-greeting">…</div>
+    </div>
+  </div>
+  <div id="chat-footer">
+    <input id="chat-input" type="text" placeholder="話しかける…"
+      maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
+    <button id="chat-send" onclick="sendChat()">送る</button>
+  </div>
+</div>
 
 <div id="kouoh-loading">
   <div class="k-spinner"></div>
@@ -256,7 +343,10 @@
   AFRAME.registerComponent('seasonal-effect', {
     init: function() {
       this.particles = [];
-      this.season = getSeason();
+      // getSeason()はscript後半定義のためインラインで季節判定
+      var m = new Date().getMonth() + 1;
+      var s = (m >= 3 && m <= 5) ? 'spring' : (m >= 6 && m <= 8) ? 'summer' : (m >= 9 && m <= 11) ? 'autumn' : 'winter';
+      this.season = s;
       var season = this.season;
       var colors = {
         spring: ['#ffb7c5','#ffd0dc','#fff0f5'],
@@ -325,6 +415,7 @@
     }).catch(function(){});
 
   // ══ スタート ══
+  var audioUnlocked = false; // iOS Safari：AudioContext解放フラグ
   function startExperience() {
     var overlay = document.getElementById('start-overlay');
     overlay.style.opacity = '0';
@@ -332,12 +423,17 @@
       overlay.style.display = 'none';
       document.getElementById('scan-overlay').style.display = 'flex';
     }, 1200);
-    // ★ iOS Safari対策：ユーザータップ時に音声コンテキストを解放
-    // play→即pause することで「ユーザー操作による再生」として登録される
-    audioEl.play().then(function() {
-      audioEl.pause();
-      audioEl.currentTime = 0;
-    }).catch(function(){});
+    // iOS Safari対策：AudioContextをユーザー操作で解放するが音は出さない
+    // play()後すぐpause+currentTime=0で無音解放→AR認識後に鳴らす
+    if (!audioUnlocked) {
+      audioEl.volume = 0;
+      audioEl.play().then(function() {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+        audioEl.volume = 0;
+        audioUnlocked = true;
+      }).catch(function(){ audioUnlocked = true; });
+    }
   }
 
   // ══ AR ターゲット ══
@@ -356,11 +452,14 @@
       seasonEl.setAttribute('seasonal-effect', '');
     }
     document.getElementById('capture-btn').style.display = 'block';
+    document.getElementById('chat-btn').style.display = 'block';
     document.getElementById('scan-overlay').style.display = 'none';
     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
     audioEl.volume = 0;
     audioEl.play().catch(function(){});
     fadeAudio(0.35, 1200);
+    // 初回挨拶を取得（未取得の場合のみ）
+    if (!chatGreetingDone) fetchGreeting();
   });
 
   targetEl.addEventListener('targetLost', function() {
@@ -566,6 +665,132 @@
     if (m >= 9 && m <= 11) return 'autumn';
     return 'winter';
   }
-</script>
+
+  // ══ 空蝉チャット ══
+  var chatHistory      = [];  // [{role, content}]
+  var chatOpen         = false;
+  var chatGreetingDone = false;
+  var chatSending      = false;
+
+  function toggleChat() {
+    chatOpen = !chatOpen;
+    var panel = document.getElementById('chat-panel');
+    if (chatOpen) {
+      panel.classList.add('open');
+      document.getElementById('chat-input').focus();
+    } else {
+      panel.classList.remove('open');
+    }
+  }
+
+  // AR認識時に初回挨拶を取得
+  function fetchGreeting() {
+    chatGreetingDone = true;
+    var greetEl = document.getElementById('chat-greeting');
+    greetEl.innerHTML = '<span class="cm-dots"><span></span><span></span><span></span></span>';
+
+    var greetMsg = '初めてお目にかかります。今、あなたのお手元に香りが届いていることと存じます。';
+    chatHistory.push({ role: 'user', content: 'こんにちは。初めまして。' });
+
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages:  chatHistory,
+        season:    getSeason(),
+        weather:   currentWeather,
+        timeOfDay: getTimeSlot()
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var reply = d.reply || greetMsg;
+      greetEl.textContent = reply;
+      chatHistory.push({ role: 'assistant', content: reply });
+    })
+    .catch(function(){
+      greetEl.textContent = greetMsg;
+      chatHistory.push({ role: 'assistant', content: greetMsg });
+    });
+  }
+
+  function sendChat() {
+    if (chatSending) return;
+    var input = document.getElementById('chat-input');
+    var text  = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    chatSending = true;
+    appendUserMsg(text);
+    chatHistory.push({ role: 'user', content: text });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+    var loadId = appendAiLoading();
+
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages:  chatHistory,
+        season:    getSeason(),
+        weather:   currentWeather,
+        timeOfDay: getTimeSlot()
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      removeMsg(loadId);
+      var reply = d.reply || 'お言葉、届きませぬようで…';
+      appendAiMsg(reply);
+      chatHistory.push({ role: 'assistant', content: reply });
+      if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+    })
+    .catch(function(){
+      removeMsg(loadId);
+      appendAiMsg('接続が乱れてしまいました。もう一度、話しかけてみてください。');
+    })
+    .finally(function(){ chatSending = false; });
+  }
+
+  function appendUserMsg(text) {
+    var msgs = document.getElementById('chat-messages');
+    var d = document.createElement('div');
+    d.className = 'cm-user';
+    d.innerHTML = '<span>' + escH(text) + '</span>';
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function appendAiMsg(text) {
+    var msgs = document.getElementById('chat-messages');
+    var d = document.createElement('div');
+    d.className = 'cm-ai';
+    d.innerHTML = '<div class="cm-ai-name">空蝉</div><div>' + escH(text) + '</div>';
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function appendAiLoading() {
+    var msgs = document.getElementById('chat-messages');
+    var id = 'cl-' + Date.now();
+    var d = document.createElement('div');
+    d.className = 'cm-ai'; d.id = id;
+    d.innerHTML = '<div class="cm-ai-name">空蝉</div>' +
+      '<div class="cm-dots"><span></span><span></span><span></span></div>';
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+    return id;
+  }
+
+  function removeMsg(id) {
+    var el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function escH(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/\n/g,'<br>');
+  }</script>
 </body>
 </html>
