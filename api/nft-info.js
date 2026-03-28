@@ -1,59 +1,94 @@
+// api/nft-info.js
+// TXハッシュから NFT 情報（メタデータ）を取得して返す
+// GET /api/nft-info?txHash=0x...
+// nft.html がこのエンドポイントを呼んで購入記録を表示する
+
 import { ethers } from 'ethers';
 
-const CONTRACT_ADDRESS = '0x3A637bD5a5Ff49667Ff279BDa263c9118e7b2a03';
-
-const ABI = [
-  'function getRecord(uint256 tokenId) public view returns (tuple(string shrine, string date, string weather, string timeOfDay, string blessing, string lang, uint256 amount, uint256 timestamp))',
-  'function tokenURI(uint256 tokenId) public view returns (string)'
+const NFT_ABI = [
+  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
+  'function tokenURI(uint256 tokenId) public view returns (string memory)',
 ];
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   const { txHash } = req.query;
-  if (!txHash) return res.status(400).json({ error: 'txHashが必要です' });
+  if (!txHash || !txHash.startsWith('0x')) {
+    return res.status(400).json({ error: 'txHash が指定されていません' });
+  }
 
   try {
     const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
-    
-    // TXからtokenIdを取得
+
+    // ── TX レシートから tokenId を取得 ───────────────────────────
     const receipt = await provider.getTransactionReceipt(txHash);
-    if (!receipt) return res.status(404).json({ error: 'トランザクションが見つかりません' });
+    if (!receipt) {
+      return res.status(404).json({ error: 'トランザクションが見つかりません' });
+    }
 
-    // Transfer eventのtokenIdを取得
-    const transferTopic = ethers.id('Transfer(address,address,uint256)');
-    const log = receipt.logs.find(l => l.topics[0] === transferTopic);
-    if (!log) return res.status(404).json({ error: 'NFTが見つかりません' });
-    
-    const tokenId = BigInt(log.topics[3]).toString();
-    
-    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
-    const record = await contract.getRecord(tokenId);
-    const uri = await contract.tokenURI(tokenId);
+    // Transfer イベントから tokenId をデコード
+    const iface = new ethers.Interface(NFT_ABI);
+    let tokenId = null;
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog(log);
+        if (parsed?.name === 'Transfer') {
+          tokenId = parsed.args.tokenId;
+          break;
+        }
+      } catch (_) { /* 別コントラクトのログはスキップ */ }
+    }
 
-    // IPFSメタデータを取得
-    const ipfsUrl = uri.replace('ipfs://', 'https://ipfs.io/ipfs/');
-    const metaRes = await fetch(ipfsUrl);
+    if (tokenId === null) {
+      return res.status(404).json({ error: 'Transfer イベントが見つかりません' });
+    }
+
+    // ── tokenURI からメタデータを取得 ────────────────────────────
+    const contract = new ethers.Contract(
+      process.env.CONTRACT_ADDRESS,
+      NFT_ABI,
+      provider
+    );
+    const tokenURI = await contract.tokenURI(tokenId);
+
+    // IPFS URI の場合は HTTP ゲートウェイ経由で取得
+    const metadataUrl = tokenURI.startsWith('ipfs://')
+      ? tokenURI.replace('ipfs://', 'https://ipfs.io/ipfs/')
+      : tokenURI;
+
+    const metaRes  = await fetch(metadataUrl);
     const metadata = await metaRes.json();
 
-    const imageUrl = metadata.image?.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    // ── attributes を key→value のフラットオブジェクトに変換 ─────
+    const attrs = {};
+    if (Array.isArray(metadata.attributes)) {
+      for (const a of metadata.attributes) {
+        const key = (a.trait_type || '').toLowerCase().replace(/\s+/g, '_');
+        attrs[key] = a.value;
+      }
+    }
 
     return res.status(200).json({
-      tokenId,
-      txHash,
-      image: imageUrl,
-      name: metadata.name,
-      shrine: record[0],
-      date: record[1],
-      weather: record[2],
-      timeOfDay: record[3],
-      blessing: record[4],
-      lang: record[5],
-      amount: record[6].toString(),
+      name:          metadata.name,
+      description:   metadata.description,
+      image:         metadata.image,
+      // nft.html で使うフィールド（kouoh 購入記録）
+      product:       attrs.product       || metadata.name,
+      series:        attrs.series        || '古都の香り',
+      scent:         attrs.scent         || 'うつせみ',
+      storeName:     attrs.store         || '香老舗 ○○堂',
+      date:          attrs.purchase_date || '',
+      quantity:      attrs.quantity      || 1,
+      amount:        attrs['amount_(jpy)'] || 0,
+      certId:        attrs.certificate_id || '',
+      tokenId:       tokenId.toString(),
     });
 
   } catch (err) {
-    console.error(err);
+    console.error('[nft-info] エラー:', err);
     return res.status(500).json({ error: err.message });
   }
 }

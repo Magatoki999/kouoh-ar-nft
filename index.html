@@ -1,248 +1,571 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta charset="utf-8">
-    <title>香訪 (Kouoh) AR - 香りの記憶</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
-    <script src="https://js.stripe.com/v3/"></script>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-    
-    <style>
-      /* --- カメラ全画面 & 背景透過設定 --- */
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent !important; }
-      video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: cover !important; z-index: -1 !important; }
-      .a-canvas { z-index: 1 !important; background: transparent !important; }
-      a-scene .a-enter-vr-button, a-scene .a-enter-ar-button { display: none; }
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="utf-8">
+  <title>香訪 (Kouoh) AR - 香りの記憶</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+  <style>
+    html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent!important}
+    video{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;object-fit:cover!important;z-index:-1!important}
+    .a-canvas{z-index:1!important;background:transparent!important}
+    a-scene .a-enter-vr-button,a-scene .a-enter-ar-button{display:none}
+    :root{--gold:#D4AF37;--dark:#1a1208}
 
-      :root { --gold: #D4AF37; --dark: #1a1208; }
+    #start-overlay{
+      position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,0.92);z-index:9999;
+      display:flex;justify-content:center;align-items:center;flex-direction:column;
+      color:#fff;text-align:center;cursor:pointer;
+      font-family:'Kaisei Decol',serif;transition:opacity 1.2s ease;
+    }
+    #start-overlay h1{font-size:26px;color:var(--gold);letter-spacing:6px;margin-bottom:12px}
+    #start-overlay p{font-size:14px;color:#ccc;line-height:2;letter-spacing:1px}
 
-      /* スタート画面 */
-      #start-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background-color: rgba(0, 0, 0, 0.9); z-index: 9999;
-        display: flex; justify-content: center; align-items: center; flex-direction: column;
-        color: white; text-align: center; cursor: pointer; font-family: 'Kaisei Decol', serif;
-      }
-      #start-overlay h1 { font-size: 26px; color: var(--gold); letter-spacing: 4px; margin-bottom: 10px; }
+    #scan-overlay{
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      z-index:9990;pointer-events:none;
+      flex-direction:column;align-items:center;justify-content:center;
+    }
+    #scan-msg{color:rgba(255,255,255,0.85);font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin:0}
+    #scan-frame{margin-top:16px;width:200px;height:200px;border:2px solid rgba(212,175,55,0.7);border-radius:8px;box-shadow:0 0 20px rgba(212,175,55,0.3)}
 
-      /* 保存ボタン */
-      #capture-btn {
-        display: none; position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-        z-index: 9998; background: var(--gold); color: #000; 
-        padding: 15px 40px; border-radius: 30px; border: 1px solid #FFF;
-        font-size: 16px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); cursor: pointer;
-      }
+    #capture-btn{
+      display:none;position:fixed;bottom:40px;left:50%;transform:translateX(-50%);
+      z-index:9998;background:var(--gold);color:#000;
+      padding:15px 40px;border-radius:30px;border:1px solid #FFF;
+      font-family:'Kaisei Decol',serif;font-size:16px;font-weight:bold;
+      box-shadow:0 4px 10px rgba(0,0,0,0.5);cursor:pointer;white-space:nowrap;
+    }
 
-      /* 結果モーダル */
-      #result-modal {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.98); z-index: 10000;
-        flex-direction: column; align-items: center; overflow-y: auto; padding: 24px 16px 120px;
-      }
-      #result-image { max-width: 90%; max-height: 45vh; border: 2px solid var(--gold); margin-top: 16px;}
+    #result-modal{
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,0.98);z-index:10000;
+      flex-direction:column;align-items:center;overflow-y:auto;
+      padding:24px 16px 80px;font-family:'Kaisei Decol',serif;
+    }
+    #result-image{max-width:90%;max-height:40vh;border:2px solid var(--gold);margin-top:12px}
+    #share-btn{margin-top:14px;padding:12px 40px;background:#1DA1F2;color:#fff;font-weight:bold;border:none;border-radius:25px;cursor:pointer;font-size:14px}
+    #save-hint{font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;letter-spacing:1px}
 
-      #share-btn { margin-top: 16px; padding: 12px 40px; background: #1DA1F2; color: #fff; font-weight: bold; border: none; border-radius: 25px; cursor: pointer; }
-
-      /* 決済UI */
-      #purchase-section {
-        width: 100%; max-width: 400px; margin-top: 24px;
-        background: rgba(255,255,255,0.04); border: 1px solid rgba(212,175,55,0.35);
-        border-radius: 16px; padding: 20px 16px; text-align: center; color: white;
-      }
-      #buy-btn { width: 100%; background: var(--gold); border: none; border-radius: 12px; color: #1a1208; font-weight: bold; font-size: 16px; padding: 16px; cursor: pointer; }
-      
-      /* 戻るボタンのボタンスタイル */
-      .back-btn {
-        margin-top: 40px; padding: 12px 60px; border: 1px solid rgba(255,255,255,0.4); 
-        border-radius: 30px; color: white; cursor: pointer; font-size: 14px;
-        background: rgba(255,255,255,0.1);
-      }
-    </style>
-
-    <script>
-      // 煙エフェクト
-      AFRAME.registerComponent('incense-smoke', {
-        init: function () {
-          this.particles = [];
-          for (let i = 0; i < 25; i++) {
-            const el = document.createElement('a-sphere');
-            el.setAttribute('radius', '0.015');
-            el.setAttribute('material', {shader: 'flat', transparent: true, opacity: 0, color: '#ddd5c8', depthWrite: false});
-            this.el.appendChild(el);
-            this.particles.push({ el, life: Math.random(), speed: Math.random() * 0.002 + 0.001 });
-          }
-        },
-        tick: function (time) {
-          this.particles.forEach(p => {
-            p.life += p.speed; if (p.life > 1) p.life = 0;
-            p.el.setAttribute('position', `${Math.sin(time*0.002 + p.life*10)*0.03} ${p.life*0.8} 0`);
-            const op = p.life < 0.2 ? p.life / 0.2 : (1 - p.life);
-            p.el.setAttribute('material', 'opacity', op * 0.15);
-          });
-        }
-      });
-    </script>
+    #purchase-section{width:100%;max-width:400px;margin-top:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.35);border-radius:16px;padding:20px 16px}
+    #purchase-section.hidden{display:none}
+    .purchase-heading{font-size:17px;color:var(--gold);letter-spacing:4px;margin-bottom:3px;text-align:center}
+    .purchase-sub{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin-bottom:14px;text-align:center}
+    .product-info{display:flex;align-items:center;gap:10px;background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+    .product-icon{font-size:22px;flex-shrink:0}
+    .product-name{font-size:12px;color:rgba(255,255,255,0.85);letter-spacing:1px;line-height:1.6}
+    .product-price-unit{font-size:11px;color:rgba(212,175,55,0.7);margin-top:2px}
+    .qty-row{display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+    .qty-btn{width:44px;height:44px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.35);color:var(--gold);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;transition:all 0.15s}
+    .qty-btn:first-child{border-radius:10px 0 0 10px}
+    .qty-btn:last-child{border-radius:0 10px 10px 0}
+    .qty-btn:active{background:var(--gold);color:var(--dark)}
+    .qty-display{min-width:80px;height:44px;background:rgba(255,255,255,0.05);border-top:1px solid rgba(212,175,55,0.35);border-bottom:1px solid rgba(212,175,55,0.35);border-left:none;border-right:none;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .qty-num{font-family:'Kaisei Decol',serif;font-size:22px;color:#fff;line-height:1}
+    .qty-unit{font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px}
+    .subtotal-row{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;margin-bottom:14px;background:rgba(255,255,255,0.03);border-radius:8px}
+    .subtotal-label{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px}
+    .subtotal-value{font-family:'Kaisei Decol',serif;font-size:20px;color:var(--gold)}
+    .subtotal-tax{font-size:10px;color:rgba(255,255,255,0.3);margin-left:4px}
+    #card-element{background:rgba(255,255,255,0.07);border:1px solid rgba(212,175,55,0.4);border-radius:10px;padding:14px;margin-bottom:10px}
+    #card-errors{color:#ff6b6b;font-size:12px;margin-bottom:8px;min-height:18px}
+    #kouoh-btn{width:100%;background:linear-gradient(135deg,#b8962e,#D4AF37,#e8c840,#D4AF37);background-size:200% 200%;animation:shimmer 3s ease infinite;border:none;border-radius:12px;color:var(--dark);font-family:'Kaisei Decol',serif;font-size:16px;letter-spacing:3px;padding:16px;cursor:pointer;box-shadow:0 4px 18px rgba(212,175,55,0.3);transition:transform 0.15s;font-weight:bold}
+    #kouoh-btn:active{transform:scale(0.98)}
+    @keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+    .purchase-note{margin-top:10px;font-size:10px;color:rgba(255,255,255,0.25);line-height:1.7;text-align:center}
+    #purchase-complete{display:none;width:100%;max-width:400px;margin-top:20px;text-align:center;animation:fadeUp 0.5s ease}
+    #purchase-complete.show{display:block}
+    .complete-icon{font-size:44px;margin-bottom:10px}
+    .complete-title{font-family:'Kaisei Decol',serif;font-size:20px;color:var(--gold);letter-spacing:4px;margin-bottom:8px}
+    .complete-msg{font-size:12px;color:rgba(255,255,255,0.55);line-height:2;letter-spacing:1px}
+    .txid-box{margin-top:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:12px;text-align:left}
+    .txid-label{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:5px}
+    .txid-value{font-size:10px;color:rgba(255,255,255,0.45);word-break:break-all;font-family:monospace}
+    .txid-note{font-size:10px;color:rgba(212,175,55,0.45);margin-top:5px}
+    #nft-section{width:100%;max-width:400px;margin-top:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.3);border-radius:16px;padding:18px 16px}
+    #nft-section.hidden{display:none}
+    .nft-heading{font-family:'Kaisei Decol',serif;font-size:15px;color:var(--gold);text-align:center;letter-spacing:3px;margin-bottom:4px}
+    .nft-sub{font-size:11px;color:rgba(255,255,255,0.4);text-align:center;letter-spacing:1px;margin-bottom:12px}
+    #nft-email-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(212,175,55,0.3);border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;margin-bottom:10px;box-sizing:border-box}
+    #nft-email-input:focus{border-color:var(--gold)}
+    #nft-send-btn{width:100%;background:linear-gradient(135deg,#1a3a5c,#2a5a8c);border:1px solid rgba(100,160,220,0.4);border-radius:12px;color:#fff;font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;padding:14px;cursor:pointer;margin-bottom:8px}
+    #nft-skip-btn{width:100%;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;padding:6px}
+    #nft-complete{display:none;text-align:center;animation:fadeUp 0.5s ease}
+    #nft-complete.show{display:block}
+    .nft-complete-icon{font-size:34px;margin-bottom:8px}
+    .nft-complete-title{font-family:'Kaisei Decol',serif;font-size:16px;color:var(--gold);letter-spacing:3px;margin-bottom:6px}
+    .nft-complete-msg{font-size:12px;color:rgba(255,255,255,0.5);line-height:2}
+    .nft-txid-box{margin-top:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(100,160,220,0.25);border-radius:8px;padding:10px;text-align:left}
+    .nft-txid-label{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:2px;margin-bottom:4px}
+    .nft-txid-value{font-size:10px;color:rgba(100,180,255,0.7);word-break:break-all;font-family:monospace}
+    #nft-view-btn{display:none;margin-top:12px;padding:12px;background:linear-gradient(135deg,#b8962e,#D4AF37);color:var(--dark);font-family:'Kaisei Decol',serif;font-size:14px;letter-spacing:2px;font-weight:bold;border-radius:10px;text-align:center;text-decoration:none}
+    #kouoh-loading{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:20000;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+    #kouoh-loading.show{display:flex}
+    .k-spinner{width:44px;height:44px;border:3px solid rgba(212,175,55,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .k-loading-text{font-family:'Kaisei Decol',serif;font-size:14px;color:var(--gold);letter-spacing:3px}
+    .back-btn{margin-top:36px;padding:12px 60px;border:1px solid rgba(255,255,255,0.3);border-radius:30px;color:#fff;cursor:pointer;font-size:14px;background:rgba(255,255,255,0.07)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  </style>
 </head>
 <body>
-    <div id="start-overlay" onclick="startExperience()">
-      <h1>香訪 (Kouoh) AR</h1>
-      <p>パッケージにかざすと香りの記憶が蘇ります。<br>画面をタップして開始</p>
-    </div>
 
-    <button id="capture-btn">記憶を保存する</button>
+<div id="start-overlay" onclick="startExperience()">
+  <h1>香訪 (Kouoh) AR</h1>
+  <p>商品パッケージにスマホをかざすと<br>香りのアバターが出現します<br><br>画面をタップして開始</p>
+  <p style="margin-top:18px;font-size:12px;color:#888;letter-spacing:1px;">※ カメラへのアクセスを許可してください</p>
+</div>
 
-    <div id="result-modal">
-      <h2 style="color:var(--gold); margin:0;">香りの記憶</h2>
-      <img id="result-image" src="">
-      <button id="share-btn" onclick="shareExperience()">SNSで共有する</button>
+<div id="scan-overlay">
+  <p id="scan-msg">商品パッケージにカメラを向けてください…</p>
+  <div id="scan-frame"></div>
+</div>
 
-      <div id="purchase-section">
-        <p style="margin-top:0;">購入証明NFTを発行する</p>
-        <div id="card-element" style="background:rgba(255,255,255,0.07); border:1px solid #D4AF37; border-radius:10px; padding:14px; margin-bottom:14px;"></div>
-        <button id="buy-btn" onclick="doPurchase()">決済して発行する</button>
+<button id="capture-btn">香りの記憶を残す</button>
+
+<div id="kouoh-loading">
+  <div class="k-spinner"></div>
+  <div class="k-loading-text" id="kouoh-loading-text">購入処理中</div>
+</div>
+
+<div id="result-modal">
+  <h2 style="color:var(--gold);margin:0;letter-spacing:4px;font-family:'Kaisei Decol',serif;">香りの記憶</h2>
+  <img id="result-image" src="" alt="香りの記憶">
+  <button id="share-btn" onclick="shareExperience()">SNSで共有する</button>
+  <p id="save-hint">画像を長押しして保存してください</p>
+
+  <div id="purchase-section">
+    <div class="purchase-heading">空蝉 を購入する</div>
+    <div class="purchase-sub">古都の香り — 薫香堂</div>
+    <div class="product-info">
+      <div class="product-icon">🌿</div>
+      <div>
+        <div class="product-name">空蝉（匂い袋）<br>古都の香り シリーズ</div>
+        <div class="product-price-unit">¥440（税込）/ 個</div>
       </div>
-      
-      <!-- 【修正】トップへ戻らず、モーダルを閉じるだけに変更 -->
-      <div class="back-btn" onclick="closeResultModal()">戻る</div>
     </div>
+    <div class="qty-row">
+      <button class="qty-btn" id="qty-minus" onclick="changeQty(-1)">−</button>
+      <div class="qty-display">
+        <span class="qty-num" id="qty-num">1</span>
+        <span class="qty-unit">個</span>
+      </div>
+      <button class="qty-btn" id="qty-plus" onclick="changeQty(+1)">＋</button>
+    </div>
+    <div class="subtotal-row">
+      <span class="subtotal-label">お支払い合計</span>
+      <span><span class="subtotal-value" id="subtotal-value">¥440</span><span class="subtotal-tax">（税込）</span></span>
+    </div>
+    <div id="card-element"></div>
+    <div id="card-errors"></div>
+    <button id="kouoh-btn" onclick="doKouoh()">決済して購入証明を発行する</button>
+    <div class="purchase-note">
+      購入証明はブロックチェーンに永久保存されます。決済はStripe（PCI-DSS準拠）で保護されます。<br>
+      <a href="/legal.html" target="_blank" style="color:rgba(212,175,55,0.4);text-decoration:underline;font-size:10px;">特定商取引法に基づく表記</a>
+    </div>
+  </div>
 
-    <a-scene
-      mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
-      color-space="sRGB" 
-      renderer="colorManagement: true; preserveDrawingBuffer: true; alpha: true; antialias: true;"
-      vr-mode-ui="enabled: false" 
-      device-orientation-permission-ui="enabled: false"
-    >
-      <a-assets>
-        <a-asset-item id="utsusemiModel" src="./utsusemi.glb"></a-asset-item>
-        <audio id="ambient-audio" src="./ambient.mp3" preload="auto" loop></audio>
-      </a-assets>
+  <div id="purchase-complete">
+    <div class="complete-icon">🌿</div>
+    <div class="complete-title">購入が完了しました</div>
+    <div class="complete-msg">ありがとうございます。<br>お香の購入記録がブロックチェーンに刻まれました。</div>
+    <div class="txid-box">
+      <div class="txid-label">購入証明 ID</div>
+      <div class="txid-value" id="purchase-txid">—</div>
+      <div class="txid-note">※ このIDで購入記録をいつでも確認できます</div>
+    </div>
+  </div>
 
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+  <div id="nft-section" class="hidden">
+    <div class="nft-heading">購入証明NFTを受け取る</div>
+    <div class="nft-sub">メールアドレスを入力するだけ。ウォレット不要。</div>
+    <div id="nft-form">
+      <input type="email" id="nft-email-input" placeholder="メールアドレス">
+      <button id="nft-send-btn" onclick="doMintNFT()">NFTを受け取る</button>
+      <button id="nft-skip-btn" onclick="skipNFT()">スキップ</button>
+    </div>
+    <div id="nft-complete">
+      <div class="nft-complete-icon">✨</div>
+      <div class="nft-complete-title">NFTが届きました</div>
+      <div class="nft-complete-msg">購入証明NFTをお送りしました。<br>メールをご確認ください。</div>
+      <div class="nft-txid-box">
+        <div class="nft-txid-label">NFT発行 TX</div>
+        <div class="nft-txid-value" id="nft-txid">—</div>
+      </div>
+      <a id="nft-view-btn" href="#" target="_blank">NFT確認ページで見る</a>
+    </div>
+  </div>
 
-      <a-entity id="target0" mindar-image-target="targetIndex: 0">
-        <a-entity id="manifestation" visible="false">
-          <a-gltf-model src="#utsusemiModel" position="0 0 0" rotation="180 90 90" scale="1.2 1.2 1.2" animation-mixer></a-gltf-model>
-          <a-entity incense-smoke position="0 0 0.1" rotation="180 90 90"></a-entity>
-        </a-entity>
-      </a-entity>
-    </a-scene>
+  <div class="back-btn" onclick="closeResultModal()">戻る</div>
+</div>
 
-    <script>
-      const audio = document.getElementById('ambient-audio');
-      const captureBtn = document.getElementById('capture-btn');
-      const resultModal = document.getElementById('result-modal');
-      const targetEl = document.querySelector('#target0');
-      const manifestationEl = document.querySelector('#manifestation');
+<a-scene
+  mindar-image="imageTargetSrc:./targets.mind; autoStart:true; uiLoading:no; uiScanning:no;"
+  color-space="sRGB"
+  renderer="colorManagement:true; preserveDrawingBuffer:true; alpha:true; antialias:true;"
+  vr-mode-ui="enabled:false"
+  device-orientation-permission-ui="enabled:false"
+>
+  <a-assets>
+    <a-asset-item id="utsusemiModel" src="./utsusemi.glb"></a-asset-item>
+    <audio id="ambient-audio" src="./ambient.mp3" preload="auto" loop></audio>
+  </a-assets>
+  <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
+  <a-entity id="target0" mindar-image-target="targetIndex:0">
+    <a-entity id="manifestation" visible="false">
+      <a-gltf-model src="#utsusemiModel" position="0 0 0" rotation="180 90 90" scale="1.2 1.2 1.2" animation-mixer></a-gltf-model>
+      <a-entity id="smoke-entity" position="0 0 0.1" rotation="180 90 90"></a-entity>
+      <a-entity id="season-entity" position="0 0.1 0.05"></a-entity>
+    </a-entity>
+  </a-entity>
+</a-scene>
 
-      function startExperience() {
-        document.getElementById('start-overlay').style.display = 'none';
-        audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(e => console.log(e));
+<script>
+  // ══ 煙エフェクト（最小・安全版） ══
+  AFRAME.registerComponent('incense-smoke', {
+    init: function() {
+      this.particles = [];
+      for (var i = 0; i < 20; i++) {
+        var el = document.createElement('a-sphere');
+        el.setAttribute('radius', '0.012');
+        el.setAttribute('material', 'shader:flat; transparent:true; opacity:0; color:#ddd5c8; depthWrite:false');
+        this.el.appendChild(el);
+        this.particles.push({ el: el, life: Math.random(), speed: Math.random() * 0.002 + 0.001, phase: Math.random() * 6.28 });
       }
-
-      targetEl.addEventListener('targetFound', () => {
-        manifestationEl.setAttribute('visible', true);
-        captureBtn.style.display = 'block';
-        audio.volume = 0;
-        audio.play();
-        fadeAudio(0.4, 1000); 
+    },
+    tick: function(time) {
+      this.particles.forEach(function(p) {
+        p.life += p.speed;
+        if (p.life > 1) p.life = 0;
+        var x = Math.sin(time * 0.002 + p.phase + p.life * 6) * 0.05;
+        var y = p.life * 0.75;
+        p.el.setAttribute('position', x + ' ' + y + ' 0');
+        var op = (p.life < 0.2 ? p.life / 0.2 : (1 - p.life)) * 0.15;
+        p.el.setAttribute('material', 'opacity:' + op.toFixed(3));
       });
+    }
+  });
 
-      targetEl.addEventListener('targetLost', () => {
-        captureBtn.style.display = 'none';
-        fadeAudio(0, 1000, () => { audio.pause(); });
-      });
-
-      function fadeAudio(targetVol, duration, callback) {
-        const startVol = audio.volume;
-        const startTime = performance.now();
-        function update() {
-          const now = performance.now();
-          const p = Math.min(1, (now - startTime) / duration);
-          audio.volume = startVol + (targetVol - startVol) * p;
-          if (p < 1) requestAnimationFrame(update);
-          else if (callback) callback();
+  // ══ 四季エフェクト（a-sphereのみ・var・安全版） ══
+  // 春：ピンク花びら  夏：黄緑蛍  秋：橙紅葉  冬：白雪
+  AFRAME.registerComponent('seasonal-effect', {
+    init: function() {
+      this.particles = [];
+      this.season = getSeason();
+      var season = this.season;
+      var colors = {
+        spring: ['#ffb7c5','#ffd0dc','#fff0f5'],
+        summer: ['#aaff66','#88ff44','#ccff88'],
+        autumn: ['#cc3300','#ff6600','#cc6600'],
+        winter: ['#ddeeff','#eef4ff','#ffffff']
+      };
+      var palette = colors[season] || colors.spring;
+      var count = 25;
+      for (var i = 0; i < count; i++) {
+        var el = document.createElement('a-sphere');
+        var r = season === 'summer' ? '0.008' : '0.014';
+        el.setAttribute('radius', r);
+        var c = palette[Math.floor(Math.random() * palette.length)];
+        el.setAttribute('material', 'shader:flat; transparent:true; opacity:0; color:' + c + '; depthWrite:false');
+        this.el.appendChild(el);
+        this.particles.push({
+          el:      el,
+          x:       (Math.random() - 0.5) * 0.9,
+          y:       Math.random() * 1.2,
+          z:       (Math.random() - 0.5) * 0.2,
+          vy:      -(Math.random() * 0.002 + 0.001),
+          phase:   Math.random() * 6.28,
+          life:    Math.random(),
+          lifeSpd: Math.random() * 0.002 + 0.001
+        });
+      }
+    },
+    tick: function(time) {
+      var season = this.season;
+      this.particles.forEach(function(p) {
+        p.life += p.lifeSpd;
+        if (p.life > 1) { p.life = 0; p.y = 1.0; p.x = (Math.random() - 0.5) * 0.9; }
+        if (season === 'summer') {
+          p.x += Math.sin(time * 0.0015 + p.phase) * 0.003;
+          p.y += Math.sin(time * 0.001 + p.phase * 1.3) * 0.002;
+        } else {
+          p.x += Math.sin(time * 0.001 + p.phase) * 0.002;
+          p.y += p.vy;
         }
-        requestAnimationFrame(update);
-      }
-
-      captureBtn.addEventListener('click', async () => {
-        captureBtn.innerText = "保存中...";
-        const sceneEl = document.querySelector('a-scene');
-        const video = document.querySelector('video');
-        const canvas = sceneEl.canvas;
-        const compositeCanvas = document.createElement('canvas');
-        compositeCanvas.width = canvas.width; compositeCanvas.height = canvas.height;
-        const ctx = compositeCanvas.getContext('2d');
-
-        const ratio = Math.max(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
-        const vw = video.videoWidth * ratio; const vh = video.videoHeight * ratio;
-        ctx.drawImage(video, (canvas.width - vw) / 2, (canvas.height - vh) / 2, vw, vh);
-        
-        sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
-        ctx.drawImage(canvas, 0, 0);
-
-        const dataUrl = compositeCanvas.toDataURL('image/jpeg', 0.8);
-        document.getElementById('result-image').src = dataUrl;
-        resultModal.style.display = 'flex';
-        
-        compositeCanvas.toBlob(blob => {
-          window.shareFile = new File([blob], "kouoh_experience.jpg", { type: "image/jpeg" });
-        }, 'image/jpeg');
-
-        initStripe();
-        captureBtn.innerText = "記憶を保存する";
+        p.el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
+        var fade = p.life < 0.15 ? p.life / 0.15 : p.life > 0.75 ? (1 - p.life) / 0.25 : 1;
+        var op = (fade * 0.75).toFixed(3);
+        p.el.setAttribute('material', 'opacity:' + op);
       });
+    }
+  });
 
-      // 【新設】モーダルを閉じてAR画面に戻る処理
-      function closeResultModal() {
-        resultModal.style.display = 'none';
-        // 決済ボタンの状態をリセット
-        const buyBtn = document.getElementById('buy-btn');
-        buyBtn.disabled = false;
-        buyBtn.textContent = "決済して発行する";
-      }
+  // ══ 状態変数 ══
+  var UNIT_PRICE    = 440;
+  var MAX_QTY       = 20;
+  var _quantity     = 1;
+  var _kouoh_amount = UNIT_PRICE;
+  var _purchase_txid = null;
+  var stripeInstance = null;
+  var cardElement    = null;
+  var currentWeather = 'clear';
 
-      async function shareExperience() {
-        if (navigator.share && window.shareFile) {
-          try {
-            await navigator.share({
-              title: '香訪 (Kouoh) AR',
-              text: 'お香の香りをARで体験しました。 #香訪AR #お香',
-              files: [window.shareFile]
-            });
-          } catch (e) { console.log(e); }
-        } else { alert("画像を長押しして保存してください。"); }
-      }
+  // ══ 天気取得 ══
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=35.0116&longitude=135.7681&current_weather=true')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var code = d.current_weather.weathercode;
+      if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) currentWeather = 'rain';
+      else if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) currentWeather = 'snow';
+    }).catch(function(){});
 
-      let stripe, card;
-      function initStripe() {
-        if (stripe) return;
-        stripe = Stripe('pk_test_51TCWBVB1c7PEb1zFztMExsSXZWRs7LoIIJ0h9k2YZezwtLjLdZ0Gwb8huiX3MoYWLFZmUasyI6SArdHLRZzL7XJW00UaIXWSmW');
-        const elements = stripe.elements();
-        card = elements.create('card', { style: { base: { color: '#fff' } } });
-        card.mount('#card-element');
-      }
+  // ══ スタート ══
+  function startExperience() {
+    var overlay = document.getElementById('start-overlay');
+    overlay.style.opacity = '0';
+    setTimeout(function() {
+      overlay.style.display = 'none';
+      document.getElementById('scan-overlay').style.display = 'flex';
+    }, 1200);
+    // ★ iOS Safari対策：ユーザータップ時に音声コンテキストを解放
+    // play→即pause することで「ユーザー操作による再生」として登録される
+    audioEl.play().then(function() {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+    }).catch(function(){});
+  }
 
-      async function doPurchase() {
-        const btn = document.getElementById('buy-btn');
-        btn.disabled = true; btn.textContent = "発行中...";
-        try {
-          const res = await fetch('/api/create-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: 500, scentType: 'utsusemi' })
-          });
-          const data = await res.json();
-          const result = await stripe.confirmCardPayment(data.clientSecret, { payment_method: { card: card } });
-          if (result.error) throw result.error;
-          alert("購入完了！NFTを発行しました。");
-          closeResultModal(); // 完了後もリロードせず閉じる
-        } catch (err) { alert(err.message); btn.disabled = false; btn.textContent = "決済して発行する"; }
+  // ══ AR ターゲット ══
+  var targetEl   = document.querySelector('#target0');
+  var manifestEl = document.querySelector('#manifestation');
+  var smokeEl    = document.querySelector('#smoke-entity');
+  var seasonEl   = document.querySelector('#season-entity');
+  var audioEl    = document.getElementById('ambient-audio');
+
+  targetEl.addEventListener('targetFound', function() {
+    manifestEl.setAttribute('visible', true);
+    if (!smokeEl.components['incense-smoke']) {
+      smokeEl.setAttribute('incense-smoke', '');
+    }
+    if (!seasonEl.components['seasonal-effect']) {
+      seasonEl.setAttribute('seasonal-effect', '');
+    }
+    document.getElementById('capture-btn').style.display = 'block';
+    document.getElementById('scan-overlay').style.display = 'none';
+    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+    audioEl.volume = 0;
+    audioEl.play().catch(function(){});
+    fadeAudio(0.35, 1200);
+  });
+
+  targetEl.addEventListener('targetLost', function() {
+    document.getElementById('capture-btn').style.display = 'none';
+    document.getElementById('scan-overlay').style.display = 'flex';
+    fadeAudio(0, 4000, function(){ audioEl.pause(); });
+  });
+
+  function fadeAudio(target, ms, cb) {
+    var start = audioEl.volume;
+    var t0 = performance.now();
+    (function tick() {
+      var p = Math.min(1, (performance.now() - t0) / ms);
+      audioEl.volume = start + (target - start) * p;
+      if (p < 1) requestAnimationFrame(tick);
+      else if (cb) cb();
+    })();
+  }
+
+  // ══ キャプチャ ══
+  document.getElementById('capture-btn').addEventListener('click', function() {
+    var btn = document.getElementById('capture-btn');
+    btn.innerText = '保存中...';
+    var sceneEl = document.querySelector('a-scene');
+    var video   = document.querySelector('video');
+    var canvas  = sceneEl.canvas;
+    var comp    = document.createElement('canvas');
+    comp.width  = canvas.width;
+    comp.height = canvas.height;
+    var ctx = comp.getContext('2d');
+    var ratio = Math.max(comp.width / video.videoWidth, comp.height / video.videoHeight);
+    var vw = video.videoWidth * ratio, vh = video.videoHeight * ratio;
+    ctx.drawImage(video, (comp.width - vw) / 2, (comp.height - vh) / 2, vw, vh);
+    sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+    ctx.drawImage(canvas, 0, 0);
+    document.getElementById('result-image').src = comp.toDataURL('image/jpeg', 0.85);
+    document.getElementById('result-modal').style.display = 'flex';
+    comp.toBlob(function(blob) {
+      window.shareFile = new File([blob], 'kouoh_memory.jpg', { type: 'image/jpeg' });
+    }, 'image/jpeg');
+    initStripe();
+    btn.innerText = '香りの記憶を残す';
+  });
+
+  // ══ モーダルを閉じる ══
+  function closeResultModal() {
+    document.getElementById('result-modal').style.display = 'none';
+    document.getElementById('purchase-section').classList.remove('hidden');
+    document.getElementById('purchase-complete').classList.remove('show');
+    document.getElementById('nft-section').classList.add('hidden');
+    document.getElementById('nft-form').style.display = 'block';
+    document.getElementById('nft-complete').classList.remove('show');
+    var btn = document.getElementById('kouoh-btn');
+    btn.disabled = false; btn.textContent = '決済して購入証明を発行する';
+    _quantity = 1; _kouoh_amount = UNIT_PRICE;
+    document.getElementById('qty-num').textContent = '1';
+    document.getElementById('subtotal-value').textContent = '¥440';
+    document.getElementById('qty-minus').style.opacity = '0.3';
+    document.getElementById('qty-plus').style.opacity  = '1';
+  }
+
+  // ══ SNSシェア ══
+  function shareExperience() {
+    if (navigator.share && window.shareFile) {
+      navigator.share({ title:'香訪 (Kouoh) AR', text:'古都の香り「空蝉」をARで体験しました。 #香訪AR', files:[window.shareFile] }).catch(function(){});
+    } else {
+      alert('画像を長押しして保存してください。');
+    }
+  }
+
+  // ══ Stripe ══
+  function initStripe() {
+    if (stripeInstance) return;
+    stripeInstance = Stripe('pk_test_51TCWBVB1c7PEb1zFztMExsSXZWRs7LoIIJ0h9k2YZezwtLjLdZ0Gwb8huiX3MoYWLFZmUasyI6SArdHLRZzL7XJW00UaIXWSmW');
+    var elements = stripeInstance.elements({ locale:'ja' });
+    cardElement = elements.create('card', {
+      disableLinkAuthentication: true,
+      style: { base: { color:'#fff', fontSize:'16px', '::placeholder':{ color:'rgba(255,255,255,0.4)' } } },
+      hidePostalCode: true
+    });
+    cardElement.mount('#card-element');
+    cardElement.on('change', function(e) {
+      document.getElementById('card-errors').textContent = e.error ? e.error.message : '';
+    });
+  }
+
+  // 初期状態
+  document.getElementById('qty-minus').style.opacity = '0.3';
+
+  // ══ 数量スピナー ══
+  function changeQty(delta) {
+    var next = _quantity + delta;
+    if (next < 1 || next > MAX_QTY) return;
+    _quantity = next;
+    _kouoh_amount = UNIT_PRICE * _quantity;
+    document.getElementById('qty-num').textContent = _quantity;
+    document.getElementById('subtotal-value').textContent = '¥' + _kouoh_amount.toLocaleString();
+    document.getElementById('qty-minus').style.opacity = _quantity <= 1 ? '0.3' : '1';
+    document.getElementById('qty-plus').style.opacity  = _quantity >= MAX_QTY ? '0.3' : '1';
+  }
+
+  // ══ 購入処理 ══
+  function doKouoh() {
+    if (!stripeInstance) { alert('決済システムの初期化中です。'); return; }
+    var btn = document.getElementById('kouoh-btn');
+    btn.disabled = true; btn.textContent = '処理中...';
+    showLoading('購入処理中');
+
+    fetch('/api/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount: _kouoh_amount, scentType: 'utsusemi', product: '空蝉', quantity: _quantity })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      return stripeInstance.confirmCardPayment(data.clientSecret, { payment_method: { card: cardElement } });
+    })
+    .then(function(result) {
+      if (result.error) throw result.error;
+      _purchase_txid = result.paymentIntent.id;
+      hideLoading();
+      showPurchaseComplete(_purchase_txid);
+    })
+    .catch(function(err) {
+      hideLoading();
+      document.getElementById('card-errors').textContent = err.message || 'エラーが発生しました';
+      btn.disabled = false; btn.textContent = '決済して購入証明を発行する';
+    });
+  }
+
+  function showPurchaseComplete(txid) {
+    document.getElementById('purchase-section').classList.add('hidden');
+    document.getElementById('purchase-complete').classList.add('show');
+    document.getElementById('purchase-txid').textContent = txid;
+    document.getElementById('nft-section').classList.remove('hidden');
+  }
+
+  // ══ NFT受け取り ══
+  function doMintNFT() {
+    var email = document.getElementById('nft-email-input').value.trim();
+    if (!email || !email.includes('@')) { alert('メールアドレスを入力してください'); return; }
+    var sendBtn = document.getElementById('nft-send-btn');
+    sendBtn.textContent = 'NFT発行中…'; sendBtn.disabled = true;
+    showLoading('NFT発行中');
+
+    var season = getSeason();
+    fetch('/api/mint-nft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email, product: '空蝉', scentType: 'utsusemi',
+        storeName: '薫香堂', series: '古都の香り',
+        date: new Date().toLocaleDateString('ja-JP'),
+        amount: _kouoh_amount, quantity: _quantity,
+        weather: currentWeather, timeOfDay: getTimeSlot(), season: season,
+        paymentIntentId: _purchase_txid
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) throw new Error(data.error || 'NFT発行に失敗しました');
+      hideLoading();
+      document.getElementById('nft-form').style.display = 'none';
+      document.getElementById('nft-complete').classList.add('show');
+      document.getElementById('nft-txid').textContent = data.txHash;
+      if (data.txHash) {
+        var viewBtn = document.getElementById('nft-view-btn');
+        viewBtn.href = '/nft.html?tx=' + data.txHash;
+        viewBtn.style.display = 'block';
       }
-    </script>
+    })
+    .catch(function(err) {
+      hideLoading();
+      sendBtn.textContent = 'NFTを受け取る'; sendBtn.disabled = false;
+      alert('NFTの発行に失敗しました: ' + err.message);
+    });
+  }
+
+  function skipNFT() { document.getElementById('nft-section').classList.add('hidden'); }
+
+  // ══ ローディング ══
+  function showLoading(msg) {
+    document.getElementById('kouoh-loading-text').textContent = msg || '処理中';
+    document.getElementById('kouoh-loading').classList.add('show');
+  }
+  function hideLoading() {
+    document.getElementById('kouoh-loading').classList.remove('show');
+  }
+
+  // ══ 季節・時間帯ヘルパー ══
+  function getTimeSlot() {
+    var h = new Date().getHours();
+    if (h >= 5  && h < 11) return 'morning';
+    if (h >= 11 && h < 16) return 'midday';
+    if (h >= 16 && h < 19) return 'evening';
+    return 'night';
+  }
+  function getSeason() {
+    var m = new Date().getMonth() + 1;
+    if (m >= 3 && m <= 5)  return 'spring';
+    if (m >= 6 && m <= 8)  return 'summer';
+    if (m >= 9 && m <= 11) return 'autumn';
+    return 'winter';
+  }
+</script>
 </body>
 </html>

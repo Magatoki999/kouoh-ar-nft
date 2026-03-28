@@ -1,47 +1,42 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24; // ここを 0.8.24 に変更
+pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-
+/// @title KouohNFT
+/// @notice お香購入証明NFT（古都の香り 空蝉シリーズ）
+/// @dev GoshuinNFT.sol ベース。mintNFT(address, string) でミント。
 contract KouohNFT is ERC721URIStorage, Ownable {
-    uint256 private _nextTokenId;
+    uint256 private _tokenIdCounter;
 
-    // NFTの属性を記録する構造体
-    struct PurchaseInfo {
-        string brandName; // お香ブランド名
-        string scentType; // 香りの種類（例：白檀、沈香）
-        uint256 purchaseDate; // 購入日
+    event Minted(address indexed recipient, uint256 indexed tokenId, string tokenURI);
+
+    constructor() ERC721("KouohNFT", "KOUOH") Ownable(msg.sender) {
+        _tokenIdCounter = 0;
     }
 
-    mapping(uint256 => PurchaseInfo) public purchaseRecords;
+    /// @notice 購入証明NFTをミントする
+    /// @param recipient NFTの受け取りアドレス（Privyが生成したウォレット）
+    /// @param tokenURI  メタデータURL（/api/metadata?...）
+    /// @return 発行されたtokenId
+    function mintNFT(address recipient, string memory tokenURI)
+        public
+        onlyOwner
+        returns (uint256)
+    {
+        uint256 tokenId = _tokenIdCounter;
+        _tokenIdCounter += 1;
 
-    constructor() ERC721("Kouoh Experience NFT", "KOUOH") Ownable(msg.sender) {}
+        _safeMint(recipient, tokenId);
+        _setTokenURI(tokenId, tokenURI);
 
-    // Mint関数（バックエンドの秘密鍵から実行）
-    function safeMint(
-        address to, 
-        string memory uri, 
-        string memory _brandName, 
-        string memory _scentType
-    ) public onlyOwner {
-        uint256 tokenId = _nextTokenId++;
-        _safeMint(to, tokenId);
-        _setTokenURI(tokenId, uri);
-
-        // 購入情報を記録
-        purchaseRecords[tokenId] = PurchaseInfo({
-            brandName: _brandName,
-            scentType: _scentType,
-            purchaseDate: block.timestamp
-        });
+        emit Minted(recipient, tokenId, tokenURI);
+        return tokenId;
     }
 
-    // 購入情報を取得する関数
-    function getPurchaseInfo(uint256 tokenId) public view returns (PurchaseInfo memory) {
-        _requireOwned(tokenId);
-        return purchaseRecords[tokenId];
+    /// @notice 現在の発行済みトークン数
+    function totalSupply() public view returns (uint256) {
+        return _tokenIdCounter;
     }
 }
