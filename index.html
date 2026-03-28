@@ -91,7 +91,7 @@
     #nft-section.hidden{display:none}
     .nft-heading{font-family:'Kaisei Decol',serif;font-size:15px;color:var(--gold);text-align:center;letter-spacing:3px;margin-bottom:4px}
     .nft-sub{font-size:11px;color:rgba(255,255,255,0.4);text-align:center;letter-spacing:1px;margin-bottom:12px}
-    #nft-email-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(212,175,55,0.3);border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;margin-bottom:10px;box-sizing:border-box}
+    #nft-email-input{-webkit-appearance:none;appearance:none;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(212,175,55,0.3);border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;margin-bottom:10px;box-sizing:border-box}
     #nft-email-input:focus{border-color:var(--gold)}
     #nft-send-btn{width:100%;background:linear-gradient(135deg,#1a3a5c,#2a5a8c);border:1px solid rgba(100,160,220,0.4);border-radius:12px;color:#fff;font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;padding:14px;cursor:pointer;margin-bottom:8px}
     #nft-skip-btn{width:100%;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;padding:6px}
@@ -164,6 +164,7 @@
       display:flex;gap:6px;align-items:center;
     }
     #chat-input{
+      -webkit-appearance:none;appearance:none;
       flex:1;background:rgba(255,255,255,0.07);
       border:1px solid rgba(212,175,55,0.3);border-radius:8px;
       padding:8px 10px;color:#e8d8c0;font-size:13px;outline:none;
@@ -200,6 +201,9 @@
 <div id="chat-panel">
   <div id="chat-header">
     <span>🌿</span><span>空蝉（うつせみ）</span>
+    <button id="tts-btn" onclick="toggleTTS()" title="音声オン"
+      style="margin-left:auto;background:none;border:none;cursor:pointer;
+      font-size:16px;padding:0 6px;opacity:0.7;">🔊</button>
     <span id="chat-close" onclick="toggleChat()">✕</span>
   </div>
   <div id="chat-messages">
@@ -469,14 +473,21 @@
   });
 
   function fadeAudio(target, ms, cb) {
+    // 既存フェードをキャンセル
+    if (window._fadeRafId) { cancelAnimationFrame(window._fadeRafId); window._fadeRafId = null; }
     var start = audioEl.volume;
     var t0 = performance.now();
-    (function tick() {
+    function tick() {
       var p = Math.min(1, (performance.now() - t0) / ms);
       audioEl.volume = start + (target - start) * p;
-      if (p < 1) requestAnimationFrame(tick);
-      else if (cb) cb();
-    })();
+      if (p < 1) {
+        window._fadeRafId = requestAnimationFrame(tick);
+      } else {
+        window._fadeRafId = null;
+        if (cb) cb();
+      }
+    }
+    window._fadeRafId = requestAnimationFrame(tick);
   }
 
   // ══ キャプチャ ══
@@ -495,6 +506,84 @@
     ctx.drawImage(video, (comp.width - vw) / 2, (comp.height - vh) / 2, vw, vh);
     sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
     ctx.drawImage(canvas, 0, 0);
+
+    // ── テキスト焼き込み ──────────────────────────────────────
+    var W = comp.width, H = comp.height;
+    var dpr = W / window.innerWidth || 2;  // 実解像度倍率
+
+    // 季節・天気・時間帯を日本語に変換
+    var SEASON_LABEL  = { spring:'春', summer:'夏', autumn:'秋', winter:'冬' };
+    var WEATHER_LABEL = { clear:'晴れ', rain:'雨', snow:'雪' };
+    var TIME_LABEL    = { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' };
+    var SEASON_EMOJI  = { spring:'🌸', summer:'🌿', autumn:'🍂', winter:'❄️' };
+
+    var seasonKey  = getSeason();
+    var weatherKey = currentWeather;
+    var timeKey    = getTimeSlot();
+
+    var seasonText  = SEASON_LABEL[seasonKey]  || '春';
+    var weatherText = WEATHER_LABEL[weatherKey] || '晴れ';
+    var timeText    = TIME_LABEL[timeKey]       || '昼';
+    var emoji       = SEASON_EMOJI[seasonKey]   || '🌸';
+
+    // 日付
+    var now = new Date();
+    var dateText = now.getFullYear() + '.' +
+      String(now.getMonth()+1).padStart(2,'0') + '.' +
+      String(now.getDate()).padStart(2,'0');
+
+    // フォントサイズ（解像度対応）
+    var fs = Math.round(13 * dpr);
+    var fsSmall = Math.round(11 * dpr);
+    var pad = Math.round(10 * dpr);
+    var lineH = Math.round(18 * dpr);
+
+    // 右下にパネル描画
+    var lines = [
+      emoji + ' ' + seasonText + ' ／ ' + weatherText,
+      '⏱ ' + timeText,
+      '📅 ' + dateText,
+      '✦ 香訪 (Kouoh) AR'
+    ];
+
+    // パネル幅を計測
+    ctx.font = fs + 'px sans-serif';
+    var maxW = 0;
+    lines.forEach(function(l){ var m = ctx.measureText(l); if(m.width>maxW)maxW=m.width; });
+    var panelW = maxW + pad * 2;
+    var panelH = lines.length * lineH + pad * 1.5;
+    var px = W - panelW - Math.round(12 * dpr);
+    var py = H - panelH - Math.round(12 * dpr);
+
+    // 背景（半透明黒）
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#0d0900';
+    roundRect(ctx, px, py, panelW, panelH, Math.round(6 * dpr));
+    ctx.fill();
+    ctx.restore();
+
+    // 枠線（金色）
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = '#D4AF37';
+    ctx.lineWidth = Math.round(0.8 * dpr);
+    roundRect(ctx, px, py, panelW, panelH, Math.round(6 * dpr));
+    ctx.stroke();
+    ctx.restore();
+
+    // テキスト描画
+    ctx.save();
+    ctx.globalAlpha = 1;
+    lines.forEach(function(line, i) {
+      var isLast = (i === lines.length - 1);
+      ctx.font = (isLast ? 'bold ' : '') + (isLast ? fsSmall : fs) + 'px sans-serif';
+      ctx.fillStyle = isLast ? '#D4AF37' : '#ffe8c0';
+      ctx.fillText(line, px + pad, py + pad + lineH * (i + 0.85));
+    });
+    ctx.restore();
+    // ────────────────────────────────────────────────────────────
+
     document.getElementById('result-image').src = comp.toDataURL('image/jpeg', 0.85);
     document.getElementById('result-modal').style.display = 'flex';
     comp.toBlob(function(blob) {
@@ -503,6 +592,21 @@
     initStripe();
     btn.innerText = '香りの記憶を残す';
   });
+
+  // ── Canvas 角丸ヘルパー ──
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
 
   // ══ モーダルを閉じる ══
   function closeResultModal() {
@@ -666,6 +770,59 @@
     return 'winter';
   }
 
+  // ══ 空蝉：音声読み上げ（Web Speech API） ══
+  var ttsEnabled  = true;  // ミュートボタンで切替可
+  var ttsSpeaking = false;
+
+  function speakUtsusemi(text) {
+    if (!ttsEnabled) return;
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+
+    var utt = new SpeechSynthesisUtterance(text);
+    utt.lang  = 'ja-JP';
+    utt.rate  = 0.88;
+    utt.pitch = 1.05;
+    utt.volume = 0.9;
+
+    var voices = window.speechSynthesis.getVoices();
+    var jaVoice = voices.find(function(v){ return v.lang === 'ja-JP'; });
+    if (jaVoice) utt.voice = jaVoice;
+
+    // BGMが鳴っている場合のみ下げる（pauseされている場合は触らない）
+    var isPlaying = !audioEl.paused && audioEl.volume > 0;
+    if (isPlaying) fadeAudio(0.35 * 0.4, 400);
+
+    utt.onstart = function(){ ttsSpeaking = true; };
+    utt.onend   = function(){
+      ttsSpeaking = false;
+      if (isPlaying) fadeAudio(0.35, 800);  // 固定値0.35に戻す
+    };
+    utt.onerror = function(){
+      ttsSpeaking = false;
+      if (isPlaying) fadeAudio(0.35, 800);
+    };
+
+    if (!jaVoice && voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = function() {
+        var v2 = window.speechSynthesis.getVoices().find(function(v){ return v.lang === 'ja-JP'; });
+        if (v2) utt.voice = v2;
+        window.speechSynthesis.speak(utt);
+        window.speechSynthesis.onvoiceschanged = null;
+      };
+    } else {
+      window.speechSynthesis.speak(utt);
+    }
+  }
+
+  function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    var btn = document.getElementById('tts-btn');
+    btn.textContent = ttsEnabled ? '🔊' : '🔇';
+    btn.title = ttsEnabled ? '音声オン' : '音声オフ';
+    if (!ttsEnabled) window.speechSynthesis.cancel();
+  }
+
   // ══ 空蝉チャット ══
   var chatHistory      = [];  // [{role, content}]
   var chatOpen         = false;
@@ -707,10 +864,12 @@
       var reply = d.reply || greetMsg;
       greetEl.textContent = reply;
       chatHistory.push({ role: 'assistant', content: reply });
+      speakUtsusemi(reply);
     })
     .catch(function(){
       greetEl.textContent = greetMsg;
       chatHistory.push({ role: 'assistant', content: greetMsg });
+      speakUtsusemi(greetMsg);
     });
   }
 
@@ -745,6 +904,7 @@
       appendAiMsg(reply);
       chatHistory.push({ role: 'assistant', content: reply });
       if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+      speakUtsusemi(reply);
     })
     .catch(function(){
       removeMsg(loadId);
