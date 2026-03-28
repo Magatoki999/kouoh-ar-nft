@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <title>香訪 管理画面</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold:#D4AF37; --dark:#0d0900; --surface:rgba(255,255,255,0.04);
+      --border:rgba(212,175,55,0.25); --dim:rgba(255,255,255,0.45);
+      --red:#ff6b6b; --green:#6bffb8;
+    }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:var(--dark); color:#e8d8c0; font-family:'Kaisei Decol',serif; min-height:100%; }
+
+    /* ══ ログイン画面 ══ */
+    #login-screen{
+      position:fixed; inset:0; background:var(--dark);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      z-index:100; gap:16px;
+    }
+    #login-screen h1{ font-size:22px; color:var(--gold); letter-spacing:5px; margin-bottom:8px; }
+    #login-screen p{ font-size:12px; color:var(--dim); letter-spacing:1px; }
+    #pw-input{
+      -webkit-appearance:none; appearance:none;
+      width:260px; background:rgba(255,255,255,0.07);
+      border:1px solid var(--border); border-radius:10px;
+      padding:12px 16px; color:#e8d8c0; font-size:15px; outline:none;
+      font-family:'Kaisei Decol',serif; text-align:center; letter-spacing:3px;
+    }
+    #pw-input:focus{ border-color:var(--gold); }
+    #login-btn{
+      width:260px; background:linear-gradient(135deg,#b8962e,var(--gold));
+      border:none; border-radius:10px; color:var(--dark);
+      font-family:'Kaisei Decol',serif; font-size:15px; font-weight:bold;
+      padding:13px; cursor:pointer; letter-spacing:2px;
+    }
+    #login-btn:active{ opacity:0.85; }
+    #login-error{ font-size:12px; color:var(--red); min-height:18px; }
+
+    /* ══ メイン画面 ══ */
+    #main-screen{ display:none; }
+
+    /* ヘッダー */
+    #admin-header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 20px; border-bottom:1px solid var(--border);
+      position:sticky; top:0; background:var(--dark); z-index:10;
+    }
+    #admin-header h1{ font-size:18px; color:var(--gold); letter-spacing:4px; }
+    #logout-btn{
+      font-size:12px; color:var(--dim); cursor:pointer; background:none;
+      border:1px solid var(--border); border-radius:20px; padding:5px 14px;
+      font-family:'Kaisei Decol',serif;
+    }
+
+    /* タブ */
+    #tabs{
+      display:flex; border-bottom:1px solid var(--border);
+      overflow-x:auto; position:sticky; top:57px; background:var(--dark); z-index:9;
+    }
+    .tab{
+      flex-shrink:0; padding:12px 18px; font-size:13px; cursor:pointer; letter-spacing:1px;
+      color:rgba(255,255,255,0.4); border-bottom:2px solid transparent; transition:all 0.2s;
+      white-space:nowrap;
+    }
+    .tab.active{ color:var(--gold); border-bottom-color:var(--gold); }
+
+    /* パネル */
+    .panel{ display:none; padding:20px; max-width:960px; margin:0 auto; padding-bottom:60px; }
+    .panel.active{ display:block; }
+
+    /* サマリーカード */
+    .summary-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px; }
+    .summary-card{
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:12px; padding:16px; text-align:center;
+    }
+    .summary-card .s-label{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-bottom:6px; }
+    .summary-card .s-value{ font-size:24px; color:var(--gold); font-weight:bold; }
+    .summary-card .s-sub{ font-size:11px; color:var(--dim); margin-top:3px; }
+
+    /* テーブル */
+    .table-wrap{ overflow-x:auto; border-radius:12px; border:1px solid var(--border); }
+    table{ width:100%; border-collapse:collapse; font-size:12px; }
+    thead tr{ background:rgba(212,175,55,0.08); }
+    th{
+      padding:10px 12px; text-align:left; font-size:11px; letter-spacing:1px;
+      color:var(--dim); white-space:nowrap; border-bottom:1px solid var(--border);
+    }
+    td{
+      padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.05);
+      vertical-align:middle; white-space:nowrap;
+    }
+    tr:last-child td{ border-bottom:none; }
+    tr:hover td{ background:rgba(255,255,255,0.02); }
+    .badge{
+      display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px;
+    }
+    .badge-ok{ background:rgba(107,255,184,0.12); color:var(--green); border:1px solid rgba(107,255,184,0.3); }
+    .badge-ng{ background:rgba(255,107,107,0.12); color:var(--red);   border:1px solid rgba(255,107,107,0.3); }
+    .badge-pend{ background:rgba(255,255,255,0.08); color:var(--dim); border:1px solid rgba(255,255,255,0.15); }
+    .mono{ font-family:monospace; font-size:11px; color:rgba(255,255,255,0.45); }
+    .truncate{ max-width:140px; overflow:hidden; text-overflow:ellipsis; }
+
+    /* もっと読む */
+    #load-more-btn{
+      display:none; margin:16px auto 0; padding:11px 40px;
+      border:1px solid var(--border); border-radius:30px; background:none;
+      color:var(--dim); cursor:pointer; font-size:13px; font-family:'Kaisei Decol',serif;
+    }
+
+    /* 統計 */
+    .stats-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:24px; }
+    .stats-card{
+      background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;
+    }
+    .stats-card h3{ font-size:12px; color:var(--dim); letter-spacing:1px; margin-bottom:12px; }
+    .bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .bar-label{ font-size:12px; min-width:60px; }
+    .bar-track{ flex:1; height:6px; background:rgba(255,255,255,0.08); border-radius:3px; }
+    .bar-fill{ height:100%; border-radius:3px; background:var(--gold); transition:width 0.4s ease; }
+    .bar-count{ font-size:11px; color:var(--dim); min-width:30px; text-align:right; }
+
+    /* 日別グラフ */
+    #daily-chart{
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:12px; padding:16px; margin-bottom:24px;
+    }
+    #daily-chart h3{ font-size:12px; color:var(--dim); letter-spacing:1px; margin-bottom:14px; }
+    .chart-bars{ display:flex; align-items:flex-end; gap:4px; height:100px; }
+    .chart-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .chart-bar-wrap{ flex:1; width:100%; display:flex; align-items:flex-end; }
+    .chart-bar{
+      width:100%; background:rgba(212,175,55,0.5); border-radius:2px 2px 0 0;
+      transition:height 0.4s ease; min-height:2px; cursor:default;
+    }
+    .chart-bar:hover{ background:var(--gold); }
+    .chart-date{ font-size:9px; color:var(--dim); writing-mode:vertical-rl; }
+
+    /* ローディング */
+    .loading{ text-align:center; padding:40px; color:var(--dim); font-size:13px; }
+    .spinner{
+      display:inline-block; width:24px; height:24px;
+      border:2px solid rgba(212,175,55,0.2); border-top-color:var(--gold);
+      border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:10px;
+    }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+
+    /* 更新ボタン */
+    .refresh-btn{
+      float:right; background:none; border:1px solid var(--border); border-radius:20px;
+      color:var(--dim); font-size:11px; padding:4px 12px; cursor:pointer;
+      font-family:'Kaisei Decol',serif; letter-spacing:1px;
+    }
+
+    @keyframes fadeIn{ from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+    .fadein{ animation:fadeIn 0.3s ease; }
+  </style>
+</head>
+<body>
+
+<!-- ══ ログイン画面 ══ -->
+<div id="login-screen">
+  <h1>香訪 管理画面</h1>
+  <p>販売店専用 — MAGATOKI Laboratory</p>
+  <input id="pw-input" type="password" placeholder="パスワード"
+    onkeydown="if(event.key==='Enter')doLogin()">
+  <button id="login-btn" onclick="doLogin()">ログイン</button>
+  <div id="login-error"></div>
+</div>
+
+<!-- ══ メイン画面 ══ -->
+<div id="main-screen">
+  <div id="admin-header">
+    <h1>香訪 管理画面</h1>
+    <button id="logout-btn" onclick="doLogout()">ログアウト</button>
+  </div>
+
+  <div id="tabs">
+    <div class="tab active" onclick="switchTab('sales')">💴 売上・決済</div>
+    <div class="tab" onclick="switchTab('nft')">🪙 NFT発行</div>
+    <div class="tab" onclick="switchTab('buyers')">📧 購入者</div>
+    <div class="tab" onclick="switchTab('stats')">📊 統計</div>
+  </div>
+
+  <!-- 売上・決済タブ -->
+  <div id="panel-sales" class="panel active">
+    <div id="sales-summary" class="summary-row"></div>
+    <button class="refresh-btn" onclick="loadPayments(true)">↺ 更新</button>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>金額</th>
+            <th>商品</th>
+            <th>数量</th>
+            <th>季節</th>
+            <th>天気</th>
+            <th>時間帯</th>
+            <th>ステータス</th>
+            <th>NFT</th>
+            <th>決済ID</th>
+          </tr>
+        </thead>
+        <tbody id="sales-tbody"><tr><td colspan="10" class="loading"><div class="spinner"></div><br>読み込み中…</td></tr></tbody>
+      </table>
+    </div>
+    <button id="load-more-btn" onclick="loadMorePayments()">さらに読み込む</button>
+  </div>
+
+  <!-- NFT発行タブ -->
+  <div id="panel-nft" class="panel">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>tokenId</th>
+            <th>TX Hash</th>
+            <th>ウォレット</th>
+            <th>メール</th>
+            <th>商品</th>
+            <th>金額</th>
+          </tr>
+        </thead>
+        <tbody id="nft-tbody"><tr><td colspan="7" class="loading"><div class="spinner"></div><br>読み込み中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 購入者タブ -->
+  <div id="panel-buyers" class="panel">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>メールアドレス</th>
+            <th>購入回数</th>
+            <th>合計金額</th>
+            <th>最終購入日</th>
+            <th>NFT受取</th>
+          </tr>
+        </thead>
+        <tbody id="buyers-tbody"><tr><td colspan="5" class="loading"><div class="spinner"></div><br>読み込み中…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 統計タブ -->
+  <div id="panel-stats" class="panel">
+    <div id="stats-summary" class="summary-row"></div>
+    <div id="daily-chart"><h3>日別売上</h3><div class="chart-bars" id="chart-bars"></div></div>
+    <div class="stats-grid" id="stats-grid"></div>
+  </div>
+</div>
+
+<script>
+// ══ 定数 ══
+var SEASON_JP   = { spring:'春', summer:'夏', autumn:'秋', winter:'冬' };
+var WEATHER_JP  = { clear:'晴れ', rain:'雨', snow:'雪' };
+var TIME_JP     = { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' };
+var SEASON_EMOJI  = { spring:'🌸', summer:'🌿', autumn:'🍂', winter:'❄️' };
+var WEATHER_EMOJI = { clear:'☀️', rain:'🌧', snow:'❄️' };
+var TIME_EMOJI    = { morning:'🌅', midday:'☀️', evening:'🌆', night:'🌙' };
+
+var _password = '';
+var _payments = [];   // キャッシュ
+var _lastId   = null;
+var _hasMore  = false;
+
+// ══ ユーティリティ ══
+function escH(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtDate(unixSec) {
+  var d = new Date(unixSec * 1000);
+  return d.getFullYear() + '/'
+    + String(d.getMonth()+1).padStart(2,'0') + '/'
+    + String(d.getDate()).padStart(2,'0') + ' '
+    + String(d.getHours()).padStart(2,'0') + ':'
+    + String(d.getMinutes()).padStart(2,'0');
+}
+function fmtYen(amount) {
+  return '¥' + Number(amount).toLocaleString();
+}
+function statusBadge(status) {
+  if (status === 'succeeded') return '<span class="badge badge-ok">成功</span>';
+  if (status === 'canceled')  return '<span class="badge badge-ng">キャンセル</span>';
+  return '<span class="badge badge-pend">' + escH(status) + '</span>';
+}
+function api(params) {
+  var q = new URLSearchParams(Object.assign({ password: _password }, params));
+  return fetch('/api/admin?' + q.toString()).then(function(r){ return r.json(); });
+}
+
+// ══ ログイン ══
+function doLogin() {
+  var pw = document.getElementById('pw-input').value;
+  if (!pw) return;
+  document.getElementById('login-btn').textContent = '確認中…';
+  document.getElementById('login-error').textContent = '';
+
+  api({ action: 'verify', password: pw })
+    .then(function(d) {
+      if (d.ok) {
+        _password = pw;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-screen').style.display  = 'block';
+        loadPayments(true);
+        loadStats();
+      } else {
+        document.getElementById('login-error').textContent = d.error || '認証に失敗しました';
+      }
+    })
+    .catch(function() {
+      document.getElementById('login-error').textContent = '通信エラーが発生しました';
+    })
+    .finally(function() {
+      document.getElementById('login-btn').textContent = 'ログイン';
+    });
+}
+function doLogout() {
+  _password = ''; _payments = []; _lastId = null;
+  document.getElementById('pw-input').value = '';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('main-screen').style.display  = 'none';
+}
+
+// ══ タブ切替 ══
+var TAB_NAMES = ['sales','nft','buyers','stats'];
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', TAB_NAMES[i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(function(p) {
+    p.classList.remove('active');
+  });
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ══ 決済データ読み込み ══
+function loadPayments(reset) {
+  if (reset) { _payments = []; _lastId = null; }
+
+  var params = { action: 'payments', limit: '50' };
+  if (_lastId) params.starting_after = _lastId;
+
+  api(params).then(function(d) {
+    if (d.error) { alert(d.error); return; }
+    _payments = reset ? d.data : _payments.concat(d.data);
+    _hasMore  = d.has_more;
+    _lastId   = d.last_id;
+
+    renderSales();
+    renderNFT();
+    renderBuyers();
+
+    var btn = document.getElementById('load-more-btn');
+    btn.style.display = _hasMore ? 'block' : 'none';
+  });
+}
+function loadMorePayments() { loadPayments(false); }
+
+// ── 売上タブ ──
+function renderSales() {
+  var succeeded = _payments.filter(function(p){ return p.status === 'succeeded'; });
+  var total     = succeeded.reduce(function(s,p){ return s + p.amount; }, 0);
+
+  document.getElementById('sales-summary').innerHTML =
+    summaryCard('総売上', fmtYen(total), succeeded.length + '件') +
+    summaryCard('決済件数', succeeded.length + '件', _payments.length + '件（全ステータス）') +
+    summaryCard('NFT発行数', succeeded.filter(function(p){ return p.nftMinted; }).length + '件', '発行済') +
+    summaryCard('平均単価', succeeded.length ? fmtYen(Math.round(total/succeeded.length)) : '—', '1件あたり');
+
+  var rows = _payments.map(function(p) {
+    return '<tr>'
+      + '<td>' + fmtDate(p.created) + '</td>'
+      + '<td>' + fmtYen(p.amount) + '</td>'
+      + '<td>' + escH(p.product || '—') + '</td>'
+      + '<td style="text-align:center">' + escH(p.quantity || '—') + '</td>'
+      + '<td>' + (SEASON_EMOJI[p.season]  || '') + ' ' + (SEASON_JP[p.season]  || '—') + '</td>'
+      + '<td>' + (WEATHER_EMOJI[p.weather]|| '') + ' ' + (WEATHER_JP[p.weather]|| '—') + '</td>'
+      + '<td>' + (TIME_EMOJI[p.timeOfDay] || '') + ' ' + (TIME_JP[p.timeOfDay] || '—') + '</td>'
+      + '<td>' + statusBadge(p.status) + '</td>'
+      + '<td>' + (p.nftMinted ? '<span class="badge badge-ok">✦ 済</span>' : '<span class="badge badge-pend">未</span>') + '</td>'
+      + '<td class="mono truncate" title="' + escH(p.id) + '">' + escH(p.id.slice(-12)) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('sales-tbody').innerHTML = rows ||
+    '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--dim)">データがありません</td></tr>';
+}
+
+// ── NFTタブ ──
+function renderNFT() {
+  var minted = _payments.filter(function(p){ return p.nftMinted && p.status === 'succeeded'; });
+  var rows = minted.map(function(p) {
+    var txShort = p.txHash ? p.txHash.slice(0,10) + '…' : '—';
+    var walShort = p.wallet ? p.wallet.slice(0,8) + '…' : '—';
+    return '<tr>'
+      + '<td>' + fmtDate(p.created) + '</td>'
+      + '<td class="mono">' + escH(p.tokenId || '—') + '</td>'
+      + '<td class="mono">'
+      + (p.txHash
+          ? '<a href="https://sepolia.etherscan.io/tx/' + escH(p.txHash) + '" target="_blank" '
+            + 'style="color:#a0d0ff;text-decoration:underline;" title="' + escH(p.txHash) + '">' + txShort + '</a>'
+          : '—')
+      + '</td>'
+      + '<td class="mono" title="' + escH(p.wallet) + '">' + walShort + '</td>'
+      + '<td>' + escH(p.email || '—') + '</td>'
+      + '<td>' + escH(p.product || '—') + '</td>'
+      + '<td>' + fmtYen(p.amount) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('nft-tbody').innerHTML = rows ||
+    '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--dim)">NFT発行履歴がありません</td></tr>';
+}
+
+// ── 購入者タブ ──
+function renderBuyers() {
+  var succeeded = _payments.filter(function(p){ return p.status === 'succeeded'; });
+  var map = {};
+  succeeded.forEach(function(p) {
+    var email = p.email || '（メールなし）';
+    if (!map[email]) map[email] = { count:0, amount:0, lastDate:0, nftCount:0 };
+    map[email].count++;
+    map[email].amount   += p.amount;
+    map[email].lastDate  = Math.max(map[email].lastDate, p.created);
+    if (p.nftMinted) map[email].nftCount++;
+  });
+
+  var sorted = Object.keys(map).sort(function(a,b){ return map[b].amount - map[a].amount; });
+  var rows = sorted.map(function(email) {
+    var m = map[email];
+    return '<tr>'
+      + '<td>' + escH(email) + '</td>'
+      + '<td style="text-align:center">' + m.count + '回</td>'
+      + '<td>' + fmtYen(m.amount) + '</td>'
+      + '<td>' + fmtDate(m.lastDate) + '</td>'
+      + '<td style="text-align:center">'
+      + (m.nftCount > 0 ? '<span class="badge badge-ok">' + m.nftCount + '件</span>' : '<span class="badge badge-pend">0</span>')
+      + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('buyers-tbody').innerHTML = rows ||
+    '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--dim)">購入者データがありません</td></tr>';
+}
+
+// ── 統計タブ ──
+var _stats = null;
+function loadStats() {
+  api({ action: 'stats' }).then(function(d) {
+    if (d.error) return;
+    _stats = d;
+    renderStats();
+  });
+}
+
+function renderStats() {
+  if (!_stats) return;
+  var s = _stats;
+
+  document.getElementById('stats-summary').innerHTML =
+    summaryCard('総売上（最新100件）', fmtYen(s.totalAmount), s.totalCount + '件') +
+    summaryCard('NFT発行率', s.totalCount ? Math.round(s.nftMintedCount/s.totalCount*100) + '%' : '—',
+      s.nftMintedCount + '/' + s.totalCount + '件') +
+    summaryCard('最多時間帯', topKey(s.byTimeOfDay, TIME_JP), '') +
+    summaryCard('最多季節', topKey(s.bySeason, SEASON_JP), '');
+
+  // バーチャート群
+  document.getElementById('stats-grid').innerHTML =
+    barCard('季節別', s.bySeason, SEASON_JP, SEASON_EMOJI) +
+    barCard('天気別', s.byWeather, WEATHER_JP, WEATHER_EMOJI) +
+    barCard('時間帯別', s.byTimeOfDay, TIME_JP, TIME_EMOJI);
+
+  // 日別グラフ
+  renderDailyChart(s.daily);
+}
+
+function renderDailyChart(daily) {
+  var keys = Object.keys(daily).sort().slice(-14); // 最新14日
+  if (keys.length === 0) return;
+  var maxAmt = Math.max.apply(null, keys.map(function(k){ return daily[k].amount; }));
+
+  var html = keys.map(function(k) {
+    var pct = maxAmt > 0 ? Math.round(daily[k].amount / maxAmt * 100) : 0;
+    var md = k.slice(5); // MM-DD
+    return '<div class="chart-col" title="' + k + '　' + fmtYen(daily[k].amount) + '　' + daily[k].count + '件">'
+      + '<div class="chart-bar-wrap"><div class="chart-bar" style="height:' + pct + '%"></div></div>'
+      + '<div class="chart-date">' + md + '</div>'
+      + '</div>';
+  }).join('');
+  document.getElementById('chart-bars').innerHTML = html;
+}
+
+function summaryCard(label, value, sub) {
+  return '<div class="summary-card fadein">'
+    + '<div class="s-label">' + label + '</div>'
+    + '<div class="s-value">' + value + '</div>'
+    + '<div class="s-sub">' + sub + '</div>'
+    + '</div>';
+}
+
+function barCard(title, data, labelMap, emojiMap) {
+  var total = Object.values(data).reduce(function(s,v){ return s+v; }, 0);
+  if (total === 0) return '';
+  var order = Object.keys(labelMap);
+  var html = '<div class="stats-card"><h3>' + title + '</h3>';
+  order.forEach(function(k) {
+    var cnt = data[k] || 0;
+    var pct = total > 0 ? Math.round(cnt/total*100) : 0;
+    html += '<div class="bar-row">'
+      + '<div class="bar-label">' + (emojiMap[k]||'') + ' ' + (labelMap[k]||k) + '</div>'
+      + '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="bar-count">' + cnt + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function topKey(obj, labelMap) {
+  var best = null, bestVal = -1;
+  Object.keys(obj).forEach(function(k) {
+    if (obj[k] > bestVal) { bestVal = obj[k]; best = k; }
+  });
+  return best ? (labelMap[best] || best) : '—';
+}
+</script>
+</body>
+</html>
