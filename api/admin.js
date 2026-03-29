@@ -31,7 +31,6 @@ export default async function handler(req, res) {
     if (action === 'payments') {
       const params = {
         limit: Math.min(parseInt(limit) || 50, 100),
-        expand: ['data.payment_method_details'],
       };
       if (starting_after) params.starting_after = starting_after;
 
