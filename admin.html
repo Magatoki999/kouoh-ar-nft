@@ -123,21 +123,23 @@
     .bar-fill{ height:100%; border-radius:3px; background:var(--gold); transition:width 0.4s ease; }
     .bar-count{ font-size:11px; color:var(--dim); min-width:30px; text-align:right; }
 
-    /* 日別グラフ */
+    /* 日別売上 */
     #daily-chart{
       background:var(--surface); border:1px solid var(--border);
       border-radius:12px; padding:16px; margin-bottom:24px;
     }
     #daily-chart h3{ font-size:12px; color:var(--dim); letter-spacing:1px; margin-bottom:14px; }
-    .chart-bars{ display:flex; align-items:flex-end; gap:4px; height:100px; }
-    .chart-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
-    .chart-bar-wrap{ flex:1; width:100%; display:flex; align-items:flex-end; }
-    .chart-bar{
-      width:100%; background:rgba(212,175,55,0.5); border-radius:2px 2px 0 0;
-      transition:height 0.4s ease; min-height:2px; cursor:default;
+    .daily-row{
+      display:grid; grid-template-columns:80px 1fr 60px 50px;
+      align-items:center; gap:8px; padding:7px 0;
+      border-bottom:1px solid rgba(255,255,255,0.04);
     }
-    .chart-bar:hover{ background:var(--gold); }
-    .chart-date{ font-size:9px; color:var(--dim); writing-mode:vertical-rl; }
+    .daily-row:last-child{ border-bottom:none; }
+    .daily-date{ font-size:12px; color:var(--dim); }
+    .daily-bar-track{ height:5px; background:rgba(255,255,255,0.07); border-radius:3px; }
+    .daily-bar-fill{ height:100%; border-radius:3px; background:var(--gold); transition:width 0.4s ease; min-width:3px; }
+    .daily-amount{ font-size:13px; color:var(--gold); text-align:right; white-space:nowrap; }
+    .daily-count{ font-size:11px; color:var(--dim); text-align:right; }
 
     /* ローディング */
     .loading{ text-align:center; padding:40px; color:var(--dim); font-size:13px; }
@@ -252,7 +254,7 @@
   <!-- 統計タブ -->
   <div id="panel-stats" class="panel">
     <div id="stats-summary" class="summary-row"></div>
-    <div id="daily-chart"><h3>日別売上</h3><div class="chart-bars" id="chart-bars"></div></div>
+    <div id="daily-chart"><h3>日別売上</h3><div id="daily-rows"></div></div>
     <div class="stats-grid" id="stats-grid"></div>
   </div>
 </div>
@@ -484,19 +486,31 @@ function renderStats() {
 }
 
 function renderDailyChart(daily) {
-  var keys = Object.keys(daily).sort().slice(-14); // 最新14日
-  if (keys.length === 0) return;
+  var keys = Object.keys(daily).sort().slice(-14);
+  var area = document.getElementById('daily-rows');
+  if (keys.length === 0) {
+    area.innerHTML = '<div style="text-align:center;padding:20px;color:var(--dim);font-size:12px">データがありません</div>';
+    return;
+  }
   var maxAmt = Math.max.apply(null, keys.map(function(k){ return daily[k].amount; }));
 
-  var html = keys.map(function(k) {
-    var pct = maxAmt > 0 ? Math.round(daily[k].amount / maxAmt * 100) : 0;
-    var md = k.slice(5); // MM-DD
-    return '<div class="chart-col" title="' + k + '　' + fmtYen(daily[k].amount) + '　' + daily[k].count + '件">'
-      + '<div class="chart-bar-wrap"><div class="chart-bar" style="height:' + pct + '%"></div></div>'
-      + '<div class="chart-date">' + md + '</div>'
+  // 新しい順に表示
+  var html = keys.slice().reverse().map(function(k) {
+    var amt = daily[k].amount;
+    var cnt = daily[k].count;
+    var pct = maxAmt > 0 ? Math.max(amt > 0 ? 4 : 0, Math.round(amt / maxAmt * 100)) : 0;
+    // 日付を見やすく整形（YYYY-MM-DD → MM/DD（曜日））
+    var d = new Date(k + 'T00:00:00');
+    var DOW = ['日','月','火','水','木','金','土'];
+    var label = (d.getMonth()+1) + '/' + d.getDate() + '（' + DOW[d.getDay()] + '）';
+    return '<div class="daily-row">'
+      + '<div class="daily-date">' + label + '</div>'
+      + '<div class="daily-bar-track"><div class="daily-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '<div class="daily-amount">' + (amt > 0 ? fmtYen(amt) : '<span style="opacity:0.3">—</span>') + '</div>'
+      + '<div class="daily-count">' + (cnt > 0 ? cnt + '件' : '<span style="opacity:0.3">0</span>') + '</div>'
       + '</div>';
   }).join('');
-  document.getElementById('chart-bars').innerHTML = html;
+  area.innerHTML = html;
 }
 
 function summaryCard(label, value, sub) {
@@ -509,16 +523,20 @@ function summaryCard(label, value, sub) {
 
 function barCard(title, data, labelMap, emojiMap) {
   var total = Object.values(data).reduce(function(s,v){ return s+v; }, 0);
-  if (total === 0) return '';
   var order = Object.keys(labelMap);
   var html = '<div class="stats-card"><h3>' + title + '</h3>';
   order.forEach(function(k) {
     var cnt = data[k] || 0;
-    var pct = total > 0 ? Math.round(cnt/total*100) : 0;
+    // 最小幅：0件=3%（薄く表示）、1件以上=最大値比率だが最低8%確保
+    var maxCnt = Math.max.apply(null, order.map(function(k2){ return data[k2] || 0; }));
+    var pct = maxCnt > 0
+      ? Math.max(cnt > 0 ? 8 : 3, Math.round(cnt / maxCnt * 100))
+      : 3;
+    var fillOpacity = cnt > 0 ? '1' : '0.25';
     html += '<div class="bar-row">'
       + '<div class="bar-label">' + (emojiMap[k]||'') + ' ' + (labelMap[k]||k) + '</div>'
-      + '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>'
-      + '<div class="bar-count">' + cnt + '</div>'
+      + '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;opacity:' + fillOpacity + '"></div></div>'
+      + '<div class="bar-count" style="color:' + (cnt > 0 ? 'var(--gold)' : 'var(--dim)') + '">' + cnt + '</div>'
       + '</div>';
   });
   html += '</div>';
