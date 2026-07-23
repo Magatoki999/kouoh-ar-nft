@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="utf-8">
+  <title>香訪 (Kouoh) AR Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+  <style>
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}
+    :root{--gold:#D4AF37;}
+    #bg-video{position:fixed;top:0;left:0;width:100vw;height:100vh;object-fit:cover;z-index:0;}
+    #three-canvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1;pointer-events:none;}
+    
+    #start-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;justify-content:center;align-items:center;flex-direction:column;color:#fff;text-align:center;font-family:'Kaisei Decol',serif;transition:opacity 1.2s ease;gap:16px;}
+    #start-overlay h1{font-size:24px;color:var(--gold);letter-spacing:6px;margin:0;}
+    #start-overlay p{font-size:13px;color:rgba(255,255,255,0.6);line-height:2;margin:0;letter-spacing:1px;}
+    
+    /* キャラクター選択UI */
+    #char-select-box{background:rgba(255,255,255,0.05);border:1px solid rgba(212,175,55,0.4);border-radius:14px;padding:18px;width:280px;text-align:center;}
+    #char-select-box p{font-size:12px;color:rgba(255,255,255,0.65);margin-bottom:16px;letter-spacing:1px;}
+    .char-btn{width:100%;background:rgba(212,175,55,0.15);border:1px solid var(--gold);border-radius:8px;padding:12px;color:var(--gold);font-family:'Kaisei Decol',serif;font-size:14px;cursor:pointer;letter-spacing:2px;margin-bottom:10px;transition:background 0.2s;}
+    .char-btn:last-child{margin-bottom:0;}
+    .char-btn:active{background:rgba(212,175,55,0.3);}
+
+    /* NFT版は一旦非表示・コメントアウト
+    #nft-check-box{background:rgba(255,255,255,0.05);border:1px solid rgba(212,175,55,0.4);border-radius:14px;padding:18px;width:280px;text-align:center;}
+    #nft-check-box p{font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:12px;letter-spacing:1px;line-height:1.8;}
+    #nft-email-input{-webkit-appearance:none;appearance:none;width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(212,175,55,0.3);border-radius:8px;padding:10px 12px;color:#fff;font-size:14px;outline:none;margin-bottom:8px;font-family:'Kaisei Decol',serif;}
+    #nft-check-btn{width:100%;background:rgba(212,175,55,0.15);border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold);font-family:'Kaisei Decol',serif;font-size:13px;cursor:pointer;letter-spacing:1px;}
+    #nft-skip-link{font-size:11px;color:rgba(255,255,255,0.25);cursor:pointer;text-decoration:underline;margin-top:6px;display:block;letter-spacing:1px;}
+    #nft-status{font-size:12px;color:rgba(212,175,55,0.7);min-height:18px;margin-top:6px;}
+    */
+
+    #scan-overlay{display:none;position:fixed;inset:0;z-index:10;pointer-events:none;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:110px;}
+    #scan-msg{color:rgba(255,255,255,0.85);font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;text-shadow:0 1px 6px rgba(0,0,0,0.9);text-align:center;line-height:2;}
+    #reticle{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:11;pointer-events:none;width:60px;height:60px;}
+    #reticle::before,#reticle::after{content:'';position:absolute;background:rgba(212,175,55,0.8);}
+    #reticle::before{width:2px;height:100%;left:50%;top:0;transform:translateX(-50%);}
+    #reticle::after{width:100%;height:2px;top:50%;left:0;transform:translateY(-50%);}
+    .reticle-ring{position:absolute;inset:0;border:2px solid rgba(212,175,55,0.5);border-radius:50%;animation:rpulse 1.8s ease-in-out infinite;}
+    @keyframes rpulse{0%,100%{transform:scale(1);opacity:0.6;}50%{transform:scale(1.2);opacity:1;}}
+    #gesture-hint{display:none;position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;background:rgba(0,0,0,0.55);border:1px solid rgba(212,175,55,0.35);border-radius:20px;padding:6px 16px;font-family:'Kaisei Decol',serif;font-size:11px;color:rgba(255,255,255,0.65);letter-spacing:1px;white-space:nowrap;}
+    
+    #capture-btn{display:none;position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:20;background:var(--gold);color:#000;padding:15px 40px;border-radius:30px;border:1px solid #FFF;font-family:'Kaisei Decol',serif;font-size:16px;font-weight:bold;box-shadow:0 4px 10px rgba(0,0,0,0.5);cursor:pointer;white-space:nowrap;}
+    #bgm-btn{display:none;position:fixed;bottom:40px;right:16px;z-index:20;background:rgba(0,0,0,0.5);color:var(--gold);border:1px solid rgba(212,175,55,0.5);border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;line-height:44px;text-align:center;}
+    
+    /* ボイスボタン */
+    #voice-btn {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(0,0,0,0.6);
+      border: 1.5px solid rgba(212,175,55,0.6);
+      border-radius: 24px;
+      padding: 8px 20px;
+      font-family: 'Kaisei Decol', serif;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      cursor: pointer;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    #voice-btn.playing { background: rgba(212,175,55,0.2); border-color: var(--gold); color: var(--gold); }
+    #voice-btn .voice-icon { font-size: 16px; line-height: 1; }
+    @keyframes voice-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    #voice-btn.playing .voice-icon { animation: voice-pulse 1.2s ease-in-out infinite; }
+
+    #holder-badge{display:none;position:fixed;bottom:100px;right:10px;z-index:20;font-size:10px;color:rgba(212,175,55,0.75);font-family:monospace;background:rgba(0,0,0,0.45);border:1px solid rgba(212,175,55,0.3);border-radius:6px;padding:3px 8px;pointer-events:none;white-space:nowrap;}
+    #result-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.98);z-index:10000;flex-direction:column;align-items:center;overflow-y:auto;padding:24px 16px 80px;font-family:'Kaisei Decol',serif;}
+    #result-modal h2{color:var(--gold);margin:0;letter-spacing:4px;font-size:20px;}
+    #result-image{max-width:90%;max-height:40vh;border:2px solid var(--gold);margin-top:12px;border-radius:4px;}
+    #share-btn{margin-top:14px;padding:12px 40px;background:#1DA1F2;color:#fff;font-weight:bold;border:none;border-radius:25px;cursor:pointer;font-size:14px;font-family:'Kaisei Decol',serif;}
+    #save-hint{font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;letter-spacing:1px;}
+    #close-result-btn{margin-top:28px;padding:12px 60px;border:1px solid rgba(255,255,255,0.3);border-radius:30px;color:#fff;cursor:pointer;font-size:14px;background:rgba(255,255,255,0.07);font-family:'Kaisei Decol',serif;}
+    #v-loading{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:20000;flex-direction:column;align-items:center;justify-content:center;gap:14px;}
+    #v-loading.show{display:flex;}
+    .v-spinner{width:36px;height:36px;border:3px solid rgba(212,175,55,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+    .v-loading-text{font-family:'Kaisei Decol',serif;font-size:13px;color:var(--gold);letter-spacing:2px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+  </style>
+</head>
+<body>
+
+<video id="bg-video" autoplay playsinline muted></video>
+<canvas id="three-canvas"></canvas>
+
+<div id="start-overlay">
+  <h1>香訪 (Kouoh) AR</h1>
+  <p>平らな場所をタップすると<br>香りのアバターが出現します</p>
+  
+  <div id="char-select-box">
+    <p>呼び出すアバターを選択してください</p>
+    <button class="char-btn" onclick="startViewer('utsusemi')">空蝉 (Utsusemi)</button>
+    <button class="char-btn" onclick="startViewer('yugao')">夕顔 (Yugao)</button>
+  </div>
+
+  <p style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:4px;">※ カメラへのアクセスを許可してください</p>
+</div>
+<div id="scan-overlay"><p id="scan-msg">画面をタップしてアバターを置く</p></div>
+<div id="reticle"><div class="reticle-ring"></div></div>
+<div id="gesture-hint">ピンチで拡縮　2本指ひねりで回転　再タップで移動</div>
+
+<button id="capture-btn">香りの記憶を残す</button>
+<button id="voice-btn">
+  <span class="voice-icon">🔊</span>
+  <span id="voice-label">ご挨拶を聞く</span>
+</button>
+<button id="bgm-btn" title="BGM停止/再生">♪</button>
+<div id="holder-badge"></div>
+<div id="v-loading"><div class="v-spinner"></div><div class="v-loading-text">確認中…</div></div>
+<div id="result-modal">
+  <h2>香りの記憶</h2>
+  <img id="result-image" src="" alt="香りの記憶">
+  <button id="share-btn" onclick="shareCapture()">SNSで共有する</button>
+  <p id="save-hint">画像を長押しして保存してください</p>
+  <button id="close-result-btn" onclick="closeResult()">戻る</button>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════
+// 状態・設定変数
+// ══════════════════════════════════════════
+var selectedChar = 'utsusemi'; // 初期値
+var VOICE_FILES = { utsusemi: './utsusemi_greeting.mp3', yugao: './yugao_greeting.mp3' };
+var voiceAudio = new Audio();
+var _voicePlaying = false;
+
+// ══════════════════════════════════════════
+// Three.js 初期化
+// ══════════════════════════════════════════
+var canvas   = document.getElementById('three-canvas');
+var renderer = new THREE.WebGLRenderer({canvas:canvas,alpha:true,antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.setClearColor(0x000000,0);
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+var scene  = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,0.01,100);
+camera.position.set(0,1.6,0);
+
+// ── デバイスオリエンテーション → カメラ回転 ──
+var _zee     = new THREE.Vector3(0,0,1);
+var _euler   = new THREE.Euler();
+var _q0      = new THREE.Quaternion();
+var _q1      = new THREE.Quaternion(-Math.sqrt(0.5),0,0,Math.sqrt(0.5));
+var _orient  = 0;
+var _hasOrientation = false;
+var _alpha=0,_beta=0,_gamma=0;
+
+function onDeviceOrientation(e){
+  if(e.alpha==null||e.beta==null||e.gamma==null) return;
+  _hasOrientation=true;
+  _alpha=THREE.MathUtils.degToRad(e.alpha);
+  _beta =THREE.MathUtils.degToRad(e.beta);
+  _gamma=THREE.MathUtils.degToRad(e.gamma);
+}
+
+function onScreenOrientationChange(){
+  _orient=THREE.MathUtils.degToRad(window.screen.orientation?window.screen.orientation.angle:(window.orientation||0));
+}
+window.addEventListener('orientationchange',onScreenOrientationChange);
+onScreenOrientationChange();
+
+function applyDeviceOrientation(){
+  if(!_hasOrientation) return;
+  _euler.set(_beta,_alpha,-_gamma,'YXZ');
+  camera.quaternion.setFromEuler(_euler);
+  camera.quaternion.multiply(_q1);
+  camera.quaternion.multiply(_q0.setFromAxisAngle(_zee,-_orient));
+}
+
+function requestOrientationPermission(cb){
+  if(typeof DeviceOrientationEvent!=='undefined'&&
+     typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission()
+      .then(function(s){
+        if(s==='granted'){
+          window.addEventListener('deviceorientation',onDeviceOrientation);
+          _permissionGranted=true;
+        }
+        if(cb)cb();
+      })
+      .catch(function(){ if(cb)cb(); });
+  } else {
+    window.addEventListener('deviceorientation',onDeviceOrientation);
+    _permissionGranted=true;
+    if(cb)cb();
+  }
+}
+
+scene.add(new THREE.AmbientLight(0xffffff,0.8));
+var dl=new THREE.DirectionalLight(0xffffff,0.6);
+dl.position.set(1,3,2); scene.add(dl);
+
+window.addEventListener('resize',function(){
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+// ══════════════════════════════════════════
+// シーングラフ
+// ══════════════════════════════════════════
+var root = new THREE.Group();
+scene.add(root);
+root.visible = false;
+
+var modelNormal=null;
+var mixerNormal=null;
+var haloMesh=null;
+var smokeList=[];
+var _smokeBase = new THREE.Vector3();
+var petalList=[];
+
+var _objScale=2.0;
+var _objRotY=0;
+
+// ══════════════════════════════════════════
+// GLB読み込み (Draco圧縮対応)
+// ══════════════════════════════════════════
+var dracoLoader = new THREE.DRACOLoader();
+dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+var gltfLoader = new THREE.GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
+
+function loadModels(){
+  var targetFile = selectedChar === 'yugao' ? './yugao.glb' : './utsusemi.glb';
+  gltfLoader.load(targetFile, function(g){
+    modelNormal = g.scene;
+    root.add(modelNormal);
+    requestAnimationFrame(function(){
+      modelNormal.rotation.y = -Math.PI/2;
+    });
+    if(g.animations && g.animations.length){
+      mixerNormal = new THREE.AnimationMixer(modelNormal);
+      g.animations.forEach(function(c){ mixerNormal.clipAction(c).play(); });
+    }
+    console.log('[plane] model loaded:', selectedChar);
+    
+    // NFT用コードはコメントアウト
+    /*
+    gltfLoader.load('./UtusemiKouahNFT.glb', function(g2){...});
+    */
+  }, undefined, function(e){ console.error('[plane] GLB load error:', e); });
+}
+
+// ══════════════════════════════════════════
+// エフェクト構築
+// ══════════════════════════════════════════
+function buildSmoke(){
+  for(var i=0;i<30;i++){
+    var big=i<18;
+    var r=big?(0.010+Math.random()*0.008):(0.004+Math.random()*0.004);
+    var geo=new THREE.SphereGeometry(r,6,6);
+    var mat=new THREE.MeshBasicMaterial({color:0xe0d8cc,transparent:true,opacity:0,depthWrite:false});
+    var m=new THREE.Mesh(geo,mat);
+    root.add(m);
+    smokeList.push({mesh:m,life:Math.random(),speed:Math.random()*0.0012+0.0005,phase:Math.random()*6.28,drift:(Math.random()-0.5)*0.06,big:big});
+  }
+}
+
+var _season=(function(){var m=new Date().getMonth()+1;return(m>=3&&m<=5)?'spring':(m>=6&&m<=8)?'summer':(m>=9&&m<=11)?'autumn':'winter';})();
+
+function buildSeason(){
+  var colors={summer:[0xaaff66,0x88ff44],autumn:[0xcc3300,0xff6600],winter:[0xddeeff,0xffffff]};
+  for(var i=0;i<25;i++){
+    var mat,geo,mesh;
+    if(_season==='spring'){
+      geo=new THREE.PlaneGeometry(0.025+Math.random()*0.025,0.025+Math.random()*0.025);
+      mat=new THREE.MeshBasicMaterial({color:0xffcccc,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide});
+    } else {
+      geo=new THREE.SphereGeometry(_season==='summer'?0.004:0.007,6,6);
+      var pal=colors[_season]||[0xffffff];
+      mat=new THREE.MeshBasicMaterial({color:pal[Math.floor(Math.random()*pal.length)],transparent:true,opacity:0,depthWrite:false});
+    }
+    mesh=new THREE.Mesh(geo,mat);
+    root.add(mesh);
+    petalList.push({mesh:mesh,x:(Math.random()-0.5)*0.9,y:0.5+Math.random()*1.5,z:(Math.random()-0.5)*0.2,vy:-(Math.random()*0.002+0.001),phase:Math.random()*6.28,rotSpd:(Math.random()-0.5)*0.03,life:Math.random(),lifeSpd:Math.random()*0.002+0.001});
+  }
+  if(_season==='spring'){
+    var img=new Image();img.crossOrigin='anonymous';img.src='./ume_petal.png';
+    img.onload=function(){
+      var tex=new THREE.Texture(img);tex.needsUpdate=true;
+      petalList.forEach(function(p){p.mesh.material.map=tex;p.mesh.material.needsUpdate=true;});
+    };
+  }
+}
+
+// ══════════════════════════════════════════
+// タップ配置
+// ══════════════════════════════════════════
+var _isPlaced=false, _isViewerReady=false, _orientationStable=false;
+
+function waitForStableOrientation(cb){
+  var count=0;
+  var check=setInterval(function(){
+    count++;
+    if(_hasOrientation && count>=15){
+      clearInterval(check);
+      _orientationStable=true;
+      if(cb) cb();
+    } else if(count>=30){ 
+      clearInterval(check);
+      _orientationStable=true;
+      if(cb) cb();
+    }
+  },100);
+}
+
+function placeAt(cx,cy){
+  var dir = new THREE.Vector3(0,0,-1);
+  dir.applyQuaternion(camera.quaternion);
+  dir.y = 0;
+  if(dir.lengthSq() < 0.001) dir.set(0,0,-1);
+  dir.normalize();
+
+  var DIST = 2.0;
+  var hit = new THREE.Vector3(
+    camera.position.x + dir.x * DIST,
+    0, // 地面レベル
+    camera.position.z + dir.z * DIST
+  );
+
+  root.position.set(hit.x,hit.y,hit.z);
+  root.scale.setScalar(_objScale);
+  root.rotation.y=THREE.MathUtils.degToRad(_objRotY);
+  root.visible=true;
+
+  if(!_isPlaced){
+    _isPlaced=true;
+    buildSmoke();
+    buildSeason();
+    document.getElementById('scan-overlay').style.display='none';
+    document.getElementById('reticle').style.display='none';
+    document.getElementById('capture-btn').style.display='block';
+    document.getElementById('bgm-btn').style.display='block';
+    document.getElementById('voice-btn').style.display='flex'; // ボイスボタン表示
+    document.getElementById('gesture-hint').style.display='block';
+    setTimeout(function(){document.getElementById('gesture-hint').style.display='none';},3500);
+    if(navigator.vibrate)navigator.vibrate([50,50,50]);
+    audioEl.volume=0;audioEl.play().catch(function(){});
+    fadeAudio(0.35,1200);
+    _audioPlaying=true;
+    _bgmPlaying=true;
+  }
+}
+
+// ══════════════════════════════════════════
+// レンダーループ
+// ══════════════════════════════════════════
+var _clock=new THREE.Clock(), _t=0;
+var _audioPlaying=false; 
+var _lostTimer=null;     
+
+(function loop(){
+  requestAnimationFrame(loop);
+  applyDeviceOrientation(); 
+  var d=_clock.getDelta(); _t+=d;
+  if(mixerNormal)mixerNormal.update(d);
+  
+  if(_isPlaced){
+    _smokeBase.set(0, 0, 0);
+    if(modelNormal){
+      var emptyObj = modelNormal.getObjectByName('Empty');
+      if(emptyObj){
+        emptyObj.getWorldPosition(_smokeBase);
+        root.worldToLocal(_smokeBase);
+      }
+    }
+    smokeList.forEach(function(p){
+      p.life+=p.speed;if(p.life>1)p.life=0;
+      var sw=Math.sin(_t*1.5+p.phase)*0.06+p.drift;
+      p.mesh.position.set(_smokeBase.x+sw, _smokeBase.y+p.life*0.8, _smokeBase.z);
+      var peak=p.big?0.55:0.35;
+      var op=p.life<0.25?(p.life/0.25)*peak:((1-p.life)/0.75)*peak;
+      p.mesh.material.opacity=op;
+    });
+    petalList.forEach(function(p){
+      p.life+=p.lifeSpd;
+      if(p.life>1){p.life=0;p.y=0.5+Math.random()*1.5;p.x=(Math.random()-0.5)*0.9;}
+      if(_season==='summer'){p.x+=Math.sin(_t*1.5+p.phase)*0.003;p.y+=Math.sin(_t+p.phase*1.3)*0.002;}
+      else{p.x+=Math.sin(_t+p.phase)*0.002;p.y+=p.vy;}
+      p.mesh.position.set(p.x,p.y,p.z);
+      if(_season==='spring')p.mesh.rotation.z+=p.rotSpd;
+      var fade=p.life<0.15?p.life/0.15:p.life>0.75?(1-p.life)/0.25:1;
+      p.mesh.material.opacity=fade*0.85;
+    });
+
+    // BGM: 画面外停止処理
+    if(_audioPlaying){
+      var screenPos = root.position.clone().project(camera);
+      var inView = screenPos.z < 1 && Math.abs(screenPos.x) < 1.2 && Math.abs(screenPos.y) < 1.2;
+      if(!inView){
+        if(!_lostTimer){
+          _lostTimer = setTimeout(function(){
+            fadeAudio(0, 2000, function(){ audioEl.pause(); _audioPlaying=false; });
+            _lostTimer=null;
+          }, 1500);
+        }
+      } else {
+        if(_lostTimer){ clearTimeout(_lostTimer); _lostTimer=null; }
+        if(!_audioPlaying && audioEl.paused){
+          audioEl.play().catch(function(){});
+          fadeAudio(0.35,1200);
+          _audioPlaying=true;
+        }
+      }
+    }
+  }
+  renderer.render(scene,camera);
+})();
+
+// ══════════════════════════════════════════
+// タッチ・ジェスチャー操作
+// ══════════════════════════════════════════
+var _touches={}, _pinchStart=null, _tapStart=null, _isTwoFinger=false;
+function isUI(el){return el&&el.closest&&el.closest('#start-overlay,#capture-btn,#voice-btn,#bgm-btn,#result-modal,#holder-badge,#gesture-hint,#v-loading');}
+function tids(){return Object.keys(_touches);}
+function tdist(a,b){var dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
+function tang(a,b){return Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;}
+
+document.addEventListener('touchstart',function(e){
+  if(isUI(e.target)||!_isViewerReady)return;
+  for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i];_touches[t.identifier]={x:t.clientX,y:t.clientY};}
+  var ids=tids();
+  if(ids.length===1){_tapStart={x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};_isTwoFinger=false;}
+  else if(ids.length===2){
+    _isTwoFinger=true;
+    var a=_touches[ids[0]],b=_touches[ids[1]];
+    _pinchStart={dist:tdist(a,b),scale:_objScale,angle:tang(a,b),rotY:_objRotY};
+    e.preventDefault();
+  }
+},{passive:false});
+
+document.addEventListener('touchmove',function(e){
+  if(isUI(e.target)||!_isViewerReady)return;
+  for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i];if(_touches[t.identifier])_touches[t.identifier]={x:t.clientX,y:t.clientY};}
+  var ids=tids();
+  if(ids.length>=2&&_pinchStart&&_isPlaced){
+    var a=_touches[ids[0]],b=_touches[ids[1]];
+    _objScale=Math.max(0.3,Math.min(8.0,_pinchStart.scale*(tdist(a,b)/_pinchStart.dist)));
+    _objRotY=_pinchStart.rotY+(tang(a,b)-_pinchStart.angle);
+    root.scale.setScalar(_objScale);
+    root.rotation.y=THREE.MathUtils.degToRad(_objRotY);
+    e.preventDefault();
+  }
+},{passive:false});
+
+document.addEventListener('touchend',function(e){
+  if(isUI(e.target)||!_isViewerReady)return;
+  var was2=_isTwoFinger;
+  for(var i=0;i<e.changedTouches.length;i++)delete _touches[e.changedTouches[i].identifier];
+  if(tids().length<2)_pinchStart=null;
+  if(tids().length===0)_isTwoFinger=false;
+  if(!was2&&_tapStart){
+    var t=e.changedTouches[0];
+    var dx=t.clientX-_tapStart.x,dy=t.clientY-_tapStart.y;
+    if(Math.sqrt(dx*dx+dy*dy)<10)placeAt(t.clientX,t.clientY);
+    _tapStart=null;
+  }
+},{passive:true});
+
+document.addEventListener('touchcancel',function(){_touches={};_pinchStart=null;_tapStart=null;_isTwoFinger=false;});
+
+// ══════════════════════════════════════════
+// カメラ映像 & BGM
+// ══════════════════════════════════════════
+var bgVideo=document.getElementById('bg-video');
+navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})
+  .then(function(s){bgVideo.srcObject=s;})
+  .catch(function(e){console.error('[plane]',e);});
+
+var audioEl=new Audio('./ambient.mp3');
+audioEl.loop=true;
+var audioUnlocked=false,_fadeRafId=null,shareFile=null;
+function fadeAudio(target,ms,cb){
+  if(_fadeRafId){cancelAnimationFrame(_fadeRafId);_fadeRafId=null;}
+  var start=audioEl.volume,t0=performance.now();
+  (function tick(){
+    var p=Math.min(1,(performance.now()-t0)/ms);
+    audioEl.volume=start+(target-start)*p;
+    if(p<1){_fadeRafId=requestAnimationFrame(tick);}
+    else{_fadeRafId=null;if(cb)cb();}
+  })();
+}
+
+var _bgmPlaying = false;
+document.getElementById('bgm-btn').addEventListener('click', function(){
+  var btn = document.getElementById('bgm-btn');
+  if(_bgmPlaying){
+    fadeAudio(0, 800, function(){ audioEl.pause(); _bgmPlaying=false; });
+    btn.textContent = '♪';
+    btn.style.opacity = '0.4';
+  } else {
+    audioEl.play().catch(function(){});
+    fadeAudio(0.35, 800);
+    _bgmPlaying = true;
+    btn.textContent = '♪';
+    btn.style.opacity = '1';
+  }
+});
+
+// ══════════════════════════════════════════
+// ボイス再生機能
+// ══════════════════════════════════════════
+document.getElementById('voice-btn').addEventListener('click', function() {
+  var btn = document.getElementById('voice-btn');
+  var label = document.getElementById('voice-label');
+  var icon = btn.querySelector('.voice-icon');
+
+  if (_voicePlaying) {
+    // 停止
+    voiceAudio.pause();
+    _voicePlaying = false;
+    btn.classList.remove('playing');
+    icon.textContent = '🔊';
+    label.textContent = 'ご挨拶を聞く';
+    if (_bgmPlaying) fadeAudio(0.35, 800); // BGM復元
+  } else {
+    // 再生
+    voiceAudio.src = VOICE_FILES[selectedChar];
+    voiceAudio.currentTime = 0;
+    voiceAudio.play().then(function() {
+      _voicePlaying = true;
+      btn.classList.add('playing');
+      icon.textContent = '🔇';
+      label.textContent = '止める';
+      if (_bgmPlaying) fadeAudio(0.1, 600); // BGM音量下げる
+    }).catch(function(e){ console.error(e); });
+  }
+});
+
+voiceAudio.onended = function() {
+  _voicePlaying = false;
+  var btn = document.getElementById('voice-btn');
+  btn.classList.remove('playing');
+  btn.querySelector('.voice-icon').textContent = '🔊';
+  document.getElementById('voice-label').textContent = 'ご挨拶を聞く';
+  if (_bgmPlaying) fadeAudio(0.35, 800);
+};
+
+// ══════════════════════════════════════════
+// 開始処理 (キャラクター選択)
+// ══════════════════════════════════════════
+var _permissionGranted = false; 
+
+function startViewer(char) {
+  selectedChar = char; // 選択されたキャラをセット
+  
+  if(_permissionGranted){
+    waitForStableOrientation(function(){
+      _isViewerReady=true;
+    });
+  } else {
+    requestOrientationPermission(function(){
+      waitForStableOrientation(function(){
+        _isViewerReady=true;
+      });
+    });
+  }
+  
+  var ov=document.getElementById('start-overlay');
+  ov.style.opacity='0';
+  setTimeout(function(){
+    ov.style.display='none';
+    document.getElementById('scan-msg').textContent='センサー初期化中…';
+    document.getElementById('scan-overlay').style.display='flex';
+    document.getElementById('reticle').style.display='block';
+    waitForStableOrientation(function(){
+      document.getElementById('scan-msg').textContent='画面をタップしてアバターを置く';
+    });
+  },1200);
+
+  // スマホの自動再生ブロック解除 (BGM & ボイス)
+  if(!audioUnlocked){
+    audioEl.volume=0; audioEl.play().catch(function(){}).finally(function(){ audioEl.pause(); audioEl.currentTime=0; });
+    voiceAudio.volume=0; voiceAudio.play().catch(function(){}).finally(function(){ voiceAudio.pause(); voiceAudio.currentTime=0; voiceAudio.volume=1; });
+    audioUnlocked=true;
+  }
+
+  loadModels();
+}
+
+// ══════════════════════════════════════════
+// キャプチャ
+// ══════════════════════════════════════════
+document.getElementById('capture-btn').addEventListener('click',function(){
+  var btn=document.getElementById('capture-btn');btn.innerText='保存中...';
+  var comp=document.createElement('canvas');comp.width=canvas.width;comp.height=canvas.height;
+  var ctx=comp.getContext('2d');
+  var ratio=Math.max(comp.width/bgVideo.videoWidth,comp.height/bgVideo.videoHeight);
+  var vw=bgVideo.videoWidth*ratio,vh=bgVideo.videoHeight*ratio;
+  ctx.drawImage(bgVideo,(comp.width-vw)/2,(comp.height-vh)/2,vw,vh);
+  renderer.render(scene,camera);
+  ctx.drawImage(canvas,0,0);
+  var W=comp.width,H=comp.height,dpr=W/window.innerWidth||2;
+  var SE={spring:'🌸',summer:'🌿',autumn:'🍂',winter:'❄️'},SL={spring:'春',summer:'夏',autumn:'秋',winter:'冬'};
+  var now=new Date(),m=now.getMonth()+1,sk=(m>=3&&m<=5)?'spring':(m>=6&&m<=8)?'summer':(m>=9&&m<=11)?'autumn':'winter';
+  var dt=now.getFullYear()+'.'+String(m).padStart(2,'0')+'.'+String(now.getDate()).padStart(2,'0');
+  var lines=[(SE[sk]||'🌸')+' '+(SL[sk]||'春'),'📅 '+dt,'✦ 香訪 (Kouoh) AR'];
+  var fs=Math.round(13*dpr),fsS=Math.round(11*dpr),pad=Math.round(10*dpr),lh=Math.round(18*dpr);
+  ctx.font=fs+'px sans-serif';var mw=0;lines.forEach(function(l){var w=ctx.measureText(l).width;if(w>mw)mw=w;});
+  var pw=mw+pad*2,ph=lines.length*lh+pad*1.5,px=W-pw-Math.round(12*dpr),py=H-ph-Math.round(12*dpr);
+  ctx.save();ctx.globalAlpha=0.55;ctx.fillStyle='#0d0900';rr(ctx,px,py,pw,ph,Math.round(6*dpr));ctx.fill();ctx.restore();
+  ctx.save();ctx.globalAlpha=0.7;ctx.strokeStyle='#D4AF37';ctx.lineWidth=Math.round(0.8*dpr);rr(ctx,px,py,pw,ph,Math.round(6*dpr));ctx.stroke();ctx.restore();
+  ctx.save();ctx.globalAlpha=1;
+  lines.forEach(function(line,i){var last=(i===lines.length-1);ctx.font=(last?'bold ':'')+((last?fsS:fs))+'px sans-serif';ctx.fillStyle=last?'#D4AF37':'#ffe8c0';ctx.fillText(line,px+pad,py+pad+lh*(i+0.85));});
+  ctx.restore();
+  var dataUrl=comp.toDataURL('image/jpeg',0.85);
+  document.getElementById('result-image').src=dataUrl;
+  document.getElementById('result-modal').style.display='flex';
+  comp.toBlob(function(blob){shareFile=new File([blob],'kouoh_plane.jpg',{type:'image/jpeg'});}, 'image/jpeg');
+  btn.innerText='香りの記憶を残す';
+});
+
+function shareCapture(){if(navigator.share&&shareFile){navigator.share({title:'香訪 (Kouoh) AR',text:'#香訪AR #KouohAR',files:[shareFile]}).catch(function(){});}else{alert('画像を長押しして保存してください');}}
+function closeResult(){document.getElementById('result-modal').style.display='none';document.getElementById('result-image').src='';}
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+</script>
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta charset="utf-8">
+  <title>Kouoh NFT — Fragrance Memory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --gold:#D4AF37; --dark:#0d0900; --dim:rgba(255,255,255,0.45); }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ background:var(--dark); color:#e8d8c0; font-family:'Kaisei Decol',serif;
+      min-height:100%; overflow-x:hidden; }
+
+    #page-header{
+      text-align:center; padding:32px 20px 20px;
+      border-bottom:1px solid rgba(212,175,55,0.2);
+    }
+    #page-header h1{ font-size:22px; color:var(--gold); letter-spacing:6px; margin-bottom:6px; }
+    #page-header p{ font-size:12px; color:var(--dim); letter-spacing:1px; }
+
+    #tabs{
+      display:flex; border-bottom:1px solid rgba(212,175,55,0.2);
+      position:sticky; top:0; background:var(--dark); z-index:10;
+    }
+    .tab{
+      flex:1; padding:14px 8px; text-align:center; font-size:13px;
+      color:rgba(255,255,255,0.4); cursor:pointer; letter-spacing:1px;
+      border-bottom:2px solid transparent; transition:all 0.2s;
+    }
+    .tab.active{ color:var(--gold); border-bottom-color:var(--gold); }
+
+    .panel{ display:none; padding:20px 16px 100px; max-width:480px; margin:0 auto; }
+    .panel.active{ display:block; }
+
+    /* NFT */
+    .nft-card{
+      background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.3);
+      border-radius:16px; padding:20px; margin-bottom:16px;
+    }
+    .nft-card-title{ font-size:11px; color:rgba(212,175,55,0.6); letter-spacing:2px; margin-bottom:12px; }
+    .nft-status{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .nft-badge{
+      background:linear-gradient(135deg,#1a3a5c,#2a5a8c);
+      border:1px solid rgba(100,160,220,0.4); border-radius:20px;
+      padding:5px 14px; font-size:12px; color:#a0d0ff; letter-spacing:1px;
+    }
+    .nft-attr{ margin-bottom:10px; }
+    .nft-attr-label{ font-size:10px; color:var(--dim); letter-spacing:1px; margin-bottom:3px; }
+    .nft-attr-value{ font-size:14px; color:#e8d8c0; word-break:break-all; }
+    .nft-attr-value.mono{ font-family:monospace; font-size:11px; color:rgba(255,255,255,0.45); }
+    .etherscan-link{
+      display:block; margin-top:16px; padding:13px; text-align:center;
+      background:rgba(100,160,220,0.1); border:1px solid rgba(100,160,220,0.3);
+      border-radius:10px; color:#a0d0ff; font-size:13px; text-decoration:none; letter-spacing:1px;
+    }
+    .status-msg{
+      text-align:center; padding:40px 20px; line-height:2; font-size:13px; color:var(--dim);
+    }
+    /* 記憶帳 */
+    .memory-empty{ text-align:center; color:var(--dim); font-size:13px; padding:40px 20px; line-height:2; }
+    .memory-count{ font-size:11px; color:rgba(212,175,55,0.5); letter-spacing:1px; margin-bottom:14px; }
+    .memory-card{
+      background:rgba(255,255,255,0.03); border:1px solid rgba(212,175,55,0.2);
+      border-radius:14px; overflow:hidden; margin-bottom:16px;
+    }
+    .memory-card.purchased{ border-color:rgba(212,175,55,0.55); }
+    .memory-img{ width:100%; aspect-ratio:16/9; object-fit:cover; display:block; }
+    .memory-body{ padding:12px 14px; }
+    .memory-meta{
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      font-size:11px; color:var(--dim); margin-bottom:8px;
+    }
+    .memory-date{ margin-left:auto; color:rgba(255,255,255,0.25); }
+    .memory-purchased-badge{
+      font-size:10px; color:rgba(212,175,55,0.8);
+      border:1px solid rgba(212,175,55,0.4); border-radius:10px; padding:2px 8px;
+    }
+    .memory-line{
+      font-size:13px; color:#c8b888; line-height:1.7;
+      border-left:2px solid rgba(212,175,55,0.3); padding-left:10px;
+      font-style:italic; margin-bottom:8px;
+    }
+    .memory-line.empty{ color:rgba(255,255,255,0.2); font-style:normal; }
+    .memory-nft-link{
+      font-size:11px; color:rgba(212,175,55,0.6);
+      text-decoration:underline; letter-spacing:1px;
+    }
+
+    #back-btn{
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      padding:12px 48px; border:1px solid rgba(255,255,255,0.25); border-radius:30px;
+      color:rgba(255,255,255,0.6); background:rgba(255,255,255,0.06);
+      font-size:13px; cursor:pointer; letter-spacing:1px;
+      font-family:'Kaisei Decol',serif; white-space:nowrap;
+    }
+
+    @keyframes fadeIn{ from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    .fadein{ animation:fadeIn 0.4s ease; }
+  </style>
+</head>
+<body>
+
+<div id="page-header">
+  <h1>香訪 (Kouoh)</h1>
+  <p id="i18n-header-sub"></p>
+</div>
+
+<div id="tabs">
+  <div class="tab active" onclick="switchTab('nft')" id="i18n-tab-nft"></div>
+  <div class="tab"        onclick="switchTab('memory')" id="i18n-tab-memory"></div>
+</div>
+
+<div id="panel-nft" class="panel active">
+  <div id="nft-info-area">
+    <div class="status-msg" id="i18n-loading"></div>
+  </div>
+</div>
+
+<div id="panel-memory" class="panel">
+  <div id="memory-area"></div>
+</div>
+
+<button id="back-btn" onclick="history.back()" id="i18n-back-btn"></button>
+
+<script>
+// ── 言語検出 ──
+var LANG = navigator.language && navigator.language.startsWith('ja') ? 'ja' : 'en';
+
+var NI18N = {
+  ja: {
+    headerSub:    '購入証明 NFT ＆ 香りの記憶帳',
+    tabNft:       '🪙 NFT証明',
+    tabMemory:    '📖 記憶帳',
+    loading:      '読み込み中…',
+    backBtn:      '← 戻る',
+    noTx:         'URLに <strong>?tx=トランザクションID</strong> が必要です。<br><span style="font-size:11px">メールに記載されたリンクからアクセスしてください。</span>',
+    errPrefix:    'エラー：',
+    netErr:       '通信エラー：',
+    nftTitle:     '購入証明 NFT',
+    nftIssued:    '✦ 発行済み',
+    attrName:     '商品名',
+    attrShrine:   '店舗',
+    attrDate:     '購入日',
+    attrWeather:  '天気',
+    attrTime:     '時間帯',
+    attrBlessing: '祝福の言葉',
+    attrAmount:   '金額',
+    attrTax:      '（税込）',
+    etherscan:    'PolygonScan で確認する →',
+    memEmpty:     'まだ記憶がございません。<br>ARで空蝉と出会い、<br>「香りの記憶を残す」ボタンを押してください。',
+    memCount:     function(n){ return '記憶 ' + n + ' 件（最新5件）'; },
+    memPurchased: '🌿 購入済',
+    memNoChat:    '— 空蝉との会話なし',
+    memNftLink:   'NFT証明を見る →',
+    SEASON:  { spring:'春', summer:'夏', autumn:'秋', winter:'冬' },
+    WEATHER: { clear:'晴れ', rain:'雨', snow:'雪' },
+    TIME:    { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' },
+    WEATHER_LABEL: { clear:'晴れ', rain:'雨', snow:'雪' },
+    TIME_LABEL:    { morning:'朝', midday:'昼', evening:'夕暮れ', night:'夜' },
+  },
+  en: {
+    headerSub:    'Purchase Certificate NFT & Memory Journal',
+    tabNft:       '🪙 NFT Certificate',
+    tabMemory:    '📖 Memory Journal',
+    loading:      'Loading…',
+    backBtn:      '← Back',
+    noTx:         'A <strong>?tx=transaction ID</strong> is required in the URL.<br><span style="font-size:11px">Please access via the link in your email.</span>',
+    errPrefix:    'Error: ',
+    netErr:       'Network error: ',
+    nftTitle:     'Purchase Certificate NFT',
+    nftIssued:    '✦ Issued',
+    attrName:     'Product',
+    attrShrine:   'Store',
+    attrDate:     'Purchase Date',
+    attrWeather:  'Weather',
+    attrTime:     'Time of Day',
+    attrBlessing: 'Blessing',
+    attrAmount:   'Amount',
+    attrTax:      ' (tax incl.)',
+    etherscan:    'View on PolygonScan →',
+    memEmpty:     'No memories yet.<br>Meet Utsusemi in AR and<br>tap "Capture Memory."',
+    memCount:     function(n){ return n + ' memor' + (n === 1 ? 'y' : 'ies') + ' (latest 5)'; },
+    memPurchased: '🌿 Purchased',
+    memNoChat:    '— No conversation with Utsusemi',
+    memNftLink:   'View NFT Certificate →',
+    SEASON:  { spring:'Spring', summer:'Summer', autumn:'Autumn', winter:'Winter' },
+    WEATHER: { clear:'Clear', rain:'Rain', snow:'Snow' },
+    TIME:    { morning:'Morning', midday:'Midday', evening:'Evening', night:'Night' },
+    WEATHER_LABEL: { clear:'Clear', rain:'Rainy', snow:'Snowy' },
+    TIME_LABEL:    { morning:'Morning', midday:'Midday', evening:'Evening', night:'Night' },
+  }
+};
+
+function nt(key) { return (NI18N[LANG] || NI18N.ja)[key] || NI18N.ja[key] || ''; }
+
+function applyNftI18N() {
+  var s = function(id, v){ var e=document.getElementById(id); if(e) e.textContent=v; };
+  var h = function(id, v){ var e=document.getElementById(id); if(e) e.innerHTML=v; };
+  h('i18n-header-sub',  nt('headerSub'));
+  s('i18n-tab-nft',     nt('tabNft'));
+  s('i18n-tab-memory',  nt('tabMemory'));
+  s('i18n-loading',     nt('loading'));
+  s('i18n-back-btn',    nt('backBtn'));
+  // html lang属性を更新
+  document.documentElement.lang = LANG;
+}
+document.addEventListener('DOMContentLoaded', applyNftI18N);
+
+var MEMORY_KEY   = 'kouoh_memories';
+var SEASON_EMOJI  = { spring:'🌸', summer:'🌿', autumn:'🍂', winter:'❄️' };
+var WEATHER_EMOJI = { clear:'☀️', rain:'🌧️', snow:'❄️' };
+var TIME_EMOJI    = { morning:'🌅', midday:'☀️', evening:'🌆', night:'🌙' };
+
+function escH(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ── タブ切替 ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', ['nft','memory'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(function(p) {
+    p.classList.remove('active');
+  });
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'memory') renderMemories();
+}
+
+// ── URL ──
+var txHash = new URLSearchParams(location.search).get('tx') || '';
+
+// ── LocalStorage ──
+function loadMemories() {
+  try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]'); } catch(e) { return []; }
+}
+
+// ── NFT情報取得 ──
+(function() {
+  var area = document.getElementById('nft-info-area');
+
+  if (!txHash) {
+    area.innerHTML = '<div class="status-msg">' + nt('noTx') + '</div>';
+    return;
+  }
+
+  fetch('/api/nft-info?txHash=' + encodeURIComponent(txHash))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) {
+        area.innerHTML = '<div class="status-msg">' + nt('errPrefix') + escH(d.error) + '</div>';
+        return;
+      }
+      renderNFT(d);
+    })
+    .catch(function(err) {
+      area.innerHTML = '<div class="status-msg">' + nt('netErr') + escH(String(err)) + '</div>';
+    });
+})();
+
+function renderNFT(d) {
+  var area = document.getElementById('nft-info-area');
+  var L = NI18N[LANG] || NI18N.ja;
+
+  var html = '<div class="nft-card fadein">'
+    + '<div class="nft-card-title">' + nt('nftTitle') + '</div>'
+    + '<div class="nft-status">'
+    + '<div class="nft-badge">' + nt('nftIssued') + '</div>'
+    + (d.tokenId ? '<span style="font-size:11px;color:rgba(255,255,255,0.3)">#' + escH(String(d.tokenId)) + '</span>' : '')
+    + '</div>';
+
+  [
+    [nt('attrName'),     d.name],
+    [nt('attrShrine'),   d.shrine],
+    [nt('attrDate'),     d.date],
+    [nt('attrWeather'),  L.WEATHER_LABEL[d.weather] || d.weather],
+    [nt('attrTime'),     L.TIME_LABEL[d.timeOfDay]  || d.timeOfDay],
+    [nt('attrBlessing'), d.blessing],
+    [nt('attrAmount'),   d.amount ? '¥' + Number(d.amount).toLocaleString() + nt('attrTax') : ''],
+  ].forEach(function(a) {
+    if (!a[1]) return;
+    html += '<div class="nft-attr"><div class="nft-attr-label">' + a[0] + '</div>'
+      + '<div class="nft-attr-value">' + escH(a[1]) + '</div></div>';
+  });
+
+  html += '<div class="nft-attr"><div class="nft-attr-label">TX HASH</div>'
+    + '<div class="nft-attr-value mono">' + escH(txHash) + '</div></div>';
+
+  html += '<a class="etherscan-link" href="https://polygonscan.com/tx/'
+    + encodeURIComponent(txHash) + '" target="_blank">' + nt('etherscan') + '</a>';
+  html += '</div>';
+
+  if (d.image) {
+    html += '<div class="nft-card fadein" style="padding:0;overflow:hidden">'
+      + '<img src="' + escH(d.image) + '" style="width:100%;display:block;" alt="NFT"></div>';
+  }
+  area.innerHTML = html;
+}
+
+function renderMemories() {
+  var area = document.getElementById('memory-area');
+  var list = loadMemories();
+  var L = NI18N[LANG] || NI18N.ja;
+
+  if (list.length === 0) {
+    area.innerHTML = '<div class="memory-empty">' + nt('memEmpty') + '</div>';
+    return;
+  }
+
+  var html = '<div class="memory-count">' + nt('memCount')(list.length) + '</div>';
+  list.forEach(function(m) {
+    var hasTxid = !!m.txid;
+    html += '<div class="memory-card' + (hasTxid ? ' purchased' : '') + ' fadein">';
+    if (m.imageDataUrl) {
+      html += '<img class="memory-img" src="' + m.imageDataUrl + '" alt="memory">';
+    }
+    html += '<div class="memory-body"><div class="memory-meta">'
+      + '<span>' + (SEASON_EMOJI[m.season]  || '🌸') + ' ' + (L.SEASON[m.season]  || '') + '</span>'
+      + '<span>' + (WEATHER_EMOJI[m.weather]|| '☀️') + ' ' + (L.WEATHER[m.weather]|| '') + '</span>'
+      + '<span>' + (TIME_EMOJI[m.timeOfDay] || '☀️') + ' ' + (L.TIME[m.timeOfDay] || '') + '</span>'
+      + (hasTxid ? '<span class="memory-purchased-badge">' + nt('memPurchased') + '</span>' : '')
+      + '<span class="memory-date">' + escH(m.date || '') + '</span>'
+      + '</div>';
+
+    html += m.utsusemiLine
+      ? '<div class="memory-line">「' + escH(m.utsusemiLine) + '」</div>'
+      : '<div class="memory-line empty">' + nt('memNoChat') + '</div>';
+
+    if (hasTxid) {
+      html += '<a class="memory-nft-link" href="/nft.html?tx=' + encodeURIComponent(m.txid) + '">' + nt('memNftLink') + '</a>';
+    }
+    html += '</div></div>';
+  });
+  area.innerHTML = html;
+}
+</script>
+</body>
+</html>

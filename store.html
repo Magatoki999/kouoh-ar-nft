@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta charset="utf-8">
+  <title>香訪 (Kouoh) AR - 香りの記憶</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol:wght@700&display=swap" rel="stylesheet">
+  <script src="https://js.stripe.com/v3/"></script>
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+  <style>
+    html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent!important}
+    video{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;object-fit:cover!important;z-index:-1!important}
+    .a-canvas{z-index:1!important;background:transparent!important}
+    a-scene .a-enter-vr-button,a-scene .a-enter-ar-button{display:none}
+    :root{--gold:#D4AF37;--dark:#1a1208}
+
+    #start-overlay{
+      position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,0.92);z-index:9999;
+      display:flex;justify-content:center;align-items:center;flex-direction:column;
+      color:#fff;text-align:center;cursor:pointer;
+      font-family:'Kaisei Decol',serif;transition:opacity 1.2s ease;
+    }
+    #start-overlay h1{font-size:26px;color:var(--gold);letter-spacing:6px;margin-bottom:12px}
+    #start-overlay p{font-size:14px;color:#ccc;line-height:2;letter-spacing:1px}
+
+    #scan-overlay{
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      z-index:9990;pointer-events:none;
+      flex-direction:column;align-items:center;justify-content:center;
+    }
+    #scan-msg{color:rgba(255,255,255,0.85);font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin:0}
+    #scan-frame{margin-top:16px;width:200px;height:200px;border:2px solid rgba(212,175,55,0.7);border-radius:8px;box-shadow:0 0 20px rgba(212,175,55,0.3)}
+
+    #capture-btn{
+      display:none;position:fixed;bottom:40px;left:50%;transform:translateX(-50%);
+      z-index:9998;background:var(--gold);color:#000;
+      padding:15px 40px;border-radius:30px;border:1px solid #FFF;
+      font-family:'Kaisei Decol',serif;font-size:16px;font-weight:bold;
+      box-shadow:0 4px 10px rgba(0,0,0,0.5);cursor:pointer;white-space:nowrap;
+    }
+
+    #result-modal{
+      display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+      background:rgba(0,0,0,0.98);z-index:10000;
+      flex-direction:column;align-items:center;overflow-y:auto;
+      padding:24px 16px 80px;font-family:'Kaisei Decol',serif;
+    }
+    #result-image{max-width:90%;max-height:40vh;border:2px solid var(--gold);margin-top:12px}
+    #share-btn{margin-top:14px;padding:12px 40px;background:#1DA1F2;color:#fff;font-weight:bold;border:none;border-radius:25px;cursor:pointer;font-size:14px}
+    #save-hint{font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;letter-spacing:1px}
+
+    #purchase-section{width:100%;max-width:400px;margin-top:20px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.35);border-radius:16px;padding:20px 16px}
+    #purchase-section.hidden{display:none}
+    .purchase-heading{font-size:17px;color:var(--gold);letter-spacing:4px;margin-bottom:3px;text-align:center}
+    .purchase-sub{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin-bottom:14px;text-align:center}
+    .product-info{display:flex;align-items:center;gap:10px;background:rgba(212,175,55,0.07);border:1px solid rgba(212,175,55,0.2);border-radius:10px;padding:10px 14px;margin-bottom:14px}
+    .product-icon{font-size:22px;flex-shrink:0}
+    .product-name{font-size:12px;color:rgba(255,255,255,0.85);letter-spacing:1px;line-height:1.6}
+    .product-price-unit{font-size:11px;color:rgba(212,175,55,0.7);margin-top:2px}
+    .qty-row{display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+    .qty-btn{width:44px;height:44px;background:rgba(212,175,55,0.12);border:1px solid rgba(212,175,55,0.35);color:var(--gold);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;transition:all 0.15s}
+    .qty-btn:first-child{border-radius:10px 0 0 10px}
+    .qty-btn:last-child{border-radius:0 10px 10px 0}
+    .qty-btn:active{background:var(--gold);color:var(--dark)}
+    .qty-display{min-width:80px;height:44px;background:rgba(255,255,255,0.05);border-top:1px solid rgba(212,175,55,0.35);border-bottom:1px solid rgba(212,175,55,0.35);border-left:none;border-right:none;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .qty-num{font-family:'Kaisei Decol',serif;font-size:22px;color:#fff;line-height:1}
+    .qty-unit{font-size:10px;color:rgba(255,255,255,0.4);margin-top:1px}
+    .subtotal-row{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px;margin-bottom:14px;background:rgba(255,255,255,0.03);border-radius:8px}
+    .subtotal-label{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px}
+    .subtotal-value{font-family:'Kaisei Decol',serif;font-size:20px;color:var(--gold)}
+    .subtotal-tax{font-size:10px;color:rgba(255,255,255,0.3);margin-left:4px}
+    #card-element{background:rgba(255,255,255,0.07);border:1px solid rgba(212,175,55,0.4);border-radius:10px;padding:14px;margin-bottom:10px}
+    #card-errors{color:#ff6b6b;font-size:12px;margin-bottom:8px;min-height:18px}
+    #kouoh-btn{width:100%;background:linear-gradient(135deg,#b8962e,#D4AF37,#e8c840,#D4AF37);background-size:200% 200%;animation:shimmer 3s ease infinite;border:none;border-radius:12px;color:var(--dark);font-family:'Kaisei Decol',serif;font-size:16px;letter-spacing:3px;padding:16px;cursor:pointer;box-shadow:0 4px 18px rgba(212,175,55,0.3);transition:transform 0.15s;font-weight:bold}
+    #kouoh-btn:active{transform:scale(0.98)}
+    @keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+    .purchase-note{margin-top:10px;font-size:10px;color:rgba(255,255,255,0.25);line-height:1.7;text-align:center}
+    #purchase-complete{display:none;width:100%;max-width:400px;margin-top:20px;text-align:center;animation:fadeUp 0.5s ease}
+    #purchase-complete.show{display:block}
+    .complete-icon{font-size:44px;margin-bottom:10px}
+    .complete-title{font-family:'Kaisei Decol',serif;font-size:20px;color:var(--gold);letter-spacing:4px;margin-bottom:8px}
+    .complete-msg{font-size:12px;color:rgba(255,255,255,0.55);line-height:2;letter-spacing:1px}
+    .txid-box{margin-top:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.25);border-radius:10px;padding:12px;text-align:left}
+    .txid-label{font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:5px}
+    .txid-value{font-size:10px;color:rgba(255,255,255,0.45);word-break:break-all;font-family:monospace}
+    .txid-note{font-size:10px;color:rgba(212,175,55,0.45);margin-top:5px}
+    #nft-section{width:100%;max-width:400px;margin-top:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(212,175,55,0.3);border-radius:16px;padding:18px 16px}
+    #nft-section.hidden{display:none}
+    .nft-heading{font-family:'Kaisei Decol',serif;font-size:15px;color:var(--gold);text-align:center;letter-spacing:3px;margin-bottom:4px}
+    .nft-sub{font-size:11px;color:rgba(255,255,255,0.4);text-align:center;letter-spacing:1px;margin-bottom:12px}
+    #nft-email-input{-webkit-appearance:none;appearance:none;width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(212,175,55,0.3);border-radius:10px;color:#fff;font-size:14px;padding:12px 14px;outline:none;margin-bottom:10px;box-sizing:border-box}
+    #nft-email-input:focus{border-color:var(--gold)}
+    #nft-send-btn{width:100%;background:linear-gradient(135deg,#1a3a5c,#2a5a8c);border:1px solid rgba(100,160,220,0.4);border-radius:12px;color:#fff;font-family:'Kaisei Decol',serif;font-size:15px;letter-spacing:2px;padding:14px;cursor:pointer;margin-bottom:8px}
+    #nft-skip-btn{width:100%;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11px;cursor:pointer;padding:6px}
+    #nft-complete{display:none;text-align:center;animation:fadeUp 0.5s ease}
+    #nft-complete.show{display:block}
+    .nft-complete-icon{font-size:34px;margin-bottom:8px}
+    .nft-complete-title{font-family:'Kaisei Decol',serif;font-size:16px;color:var(--gold);letter-spacing:3px;margin-bottom:6px}
+    .nft-complete-msg{font-size:12px;color:rgba(255,255,255,0.5);line-height:2}
+    .nft-txid-box{margin-top:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(100,160,220,0.25);border-radius:8px;padding:10px;text-align:left}
+    .nft-txid-label{font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:2px;margin-bottom:4px}
+    .nft-txid-value{font-size:10px;color:rgba(100,180,255,0.7);word-break:break-all;font-family:monospace}
+    #nft-view-btn{display:none;margin-top:12px;padding:12px;background:linear-gradient(135deg,#b8962e,#D4AF37);color:var(--dark);font-family:'Kaisei Decol',serif;font-size:14px;letter-spacing:2px;font-weight:bold;border-radius:10px;text-align:center;text-decoration:none}
+    #kouoh-loading{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:20000;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+    #kouoh-loading.show{display:flex}
+    .k-spinner{width:44px;height:44px;border:3px solid rgba(212,175,55,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .k-loading-text{font-family:'Kaisei Decol',serif;font-size:14px;color:var(--gold);letter-spacing:3px}
+    .back-btn{margin-top:36px;padding:12px 60px;border:1px solid rgba(255,255,255,0.3);border-radius:30px;color:#fff;cursor:pointer;font-size:14px;background:rgba(255,255,255,0.07)}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+    /* JPYC特典セクション */
+    #jpyc-section{display:none;width:100%;max-width:400px;margin-top:14px;background:rgba(100,60,200,0.08);border:1px solid rgba(150,100,255,0.3);border-radius:14px;padding:18px 16px;animation:fadeUp 0.5s ease}
+    #jpyc-section.show{display:block}
+    .jpyc-heading{font-family:'Kaisei Decol',serif;font-size:15px;color:#c0a0ff;letter-spacing:3px;margin-bottom:4px;text-align:center}
+    .jpyc-sub{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1px;margin-bottom:14px;text-align:center;line-height:1.7}
+    #jpyc-address-input{-webkit-appearance:none;appearance:none;width:100%;background:rgba(255,255,255,0.07);border:1px solid rgba(150,100,255,0.4);border-radius:10px;color:#fff;font-size:11px;font-family:monospace;padding:12px 14px;outline:none;margin-bottom:10px;box-sizing:border-box}
+    #jpyc-address-input:focus{border-color:#9b6aff}
+    #jpyc-check-btn{width:100%;background:linear-gradient(135deg,#6a3fc8,#9b6aff);border:none;border-radius:10px;color:#fff;font-family:'Kaisei Decol',serif;font-size:14px;letter-spacing:2px;padding:13px;cursor:pointer}
+    #jpyc-check-btn:disabled{opacity:0.5;cursor:not-allowed}
+    #jpyc-result{margin-top:12px;font-size:13px;text-align:center;line-height:1.8;min-height:20px;letter-spacing:1px}
+    #jpyc-result.success{color:#a0ffb0}
+    #jpyc-result.fail{color:#ff9090}
+
+    /* ══ チャットUI ══ */
+    #chat-btn{
+      display:none;position:fixed;bottom:24px;right:18px;z-index:9995;
+      width:52px;height:52px;border-radius:50%;
+      background:rgba(20,12,6,0.88);border:1px solid rgba(212,175,55,0.6);
+      box-shadow:0 0 14px rgba(212,175,55,0.25);
+      font-size:22px;cursor:pointer;transition:transform 0.15s;
+    }
+    #chat-btn:active{transform:scale(0.93)}
+    #chat-panel{
+      display:none;position:fixed;
+      bottom:108px;left:0;right:0;
+      max-height:calc(100vh - 180px);
+      z-index:9996;
+      background:rgba(16,9,4,0.97);
+      border-top:1px solid rgba(212,175,55,0.45);
+      border-radius:16px 16px 0 0;
+      flex-direction:column;overflow:hidden;
+      box-shadow:0 -6px 28px rgba(0,0,0,0.6);
+      animation:slideUp 0.22s ease;
+    }
+    @keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+    #chat-panel.open{display:flex}
+    #chat-header{
+      padding:10px 14px;border-bottom:1px solid rgba(212,175,55,0.2);
+      display:flex;align-items:center;gap:8px;
+      font-family:'Kaisei Decol',serif;font-size:13px;color:var(--gold);
+    }
+    #chat-close{margin-left:auto;cursor:pointer;opacity:0.5;font-size:16px;line-height:1}
+    #chat-messages{
+      flex:1;overflow-y:auto;padding:14px 16px;
+      font-size:14px;color:#e0d0b8;line-height:1.7;
+      min-height:200px;max-height:calc(100vh - 300px);
+    }
+    .cm-ai{margin-bottom:12px}
+    .cm-ai-name{font-size:10px;color:rgba(212,175,55,0.55);letter-spacing:1px;margin-bottom:3px}
+    .cm-user{margin-bottom:12px;text-align:right}
+    .cm-user span{
+      display:inline-block;background:rgba(212,175,55,0.18);
+      border:1px solid rgba(212,175,55,0.25);
+      border-radius:10px 10px 2px 10px;
+      padding:6px 10px;max-width:85%;text-align:left;
+    }
+    .cm-dots span{
+      display:inline-block;width:5px;height:5px;border-radius:50%;
+      background:rgba(212,175,55,0.5);margin:0 2px;
+      animation:dot-bounce 1.2s ease-in-out infinite;
+    }
+    .cm-dots span:nth-child(2){animation-delay:0.2s}
+    .cm-dots span:nth-child(3){animation-delay:0.4s}
+    @keyframes dot-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+    #chat-footer{
+      padding:8px;border-top:1px solid rgba(212,175,55,0.15);
+      display:flex;gap:6px;align-items:center;
+    }
+    #chat-input{
+      -webkit-appearance:none;appearance:none;
+      flex:1;background:rgba(255,255,255,0.07);
+      border:1px solid rgba(212,175,55,0.3);border-radius:8px;
+      padding:8px 10px;color:#e8d8c0;font-size:13px;outline:none;
+      font-family:'Kaisei Decol',serif;
+    }
+    #chat-input:focus{border-color:rgba(212,175,55,0.6)}
+    #chat-send{
+      background:rgba(139,105,20,0.7);border:1px solid rgba(212,175,55,0.4);
+      border-radius:8px;padding:8px 12px;color:#fff;cursor:pointer;
+      font-family:'Kaisei Decol',serif;font-size:13px;white-space:nowrap;
+    }
+    #chat-send:active{background:var(--gold);color:var(--dark)}
+  </style>
+</head>
+<body>
+
+<div id="start-overlay" onclick="startExperience()">
+  <h1>香訪 (Kouoh) AR</h1>
+  <p id="i18n-start-desc"></p>
+  <p id="i18n-start-camera" style="margin-top:18px;font-size:12px;color:#888;letter-spacing:1px;"></p>
+</div>
+
+<div id="scan-overlay">
+  <p id="scan-msg"></p>
+  <div id="scan-frame"></div>
+</div>
+
+<button id="capture-btn"></button>
+
+<button id="chat-btn" onclick="toggleChat()" title="話しかける">🪔</button>
+
+<div id="chat-panel">
+  <div id="chat-header">
+    <span>🌿</span><span id="i18n-chat-name"></span>
+    <button id="tts-btn" onclick="toggleTTS()" title="音声オン"
+      style="margin-left:auto;background:none;border:none;cursor:pointer;
+      font-size:16px;padding:0 6px;opacity:0.7;">🔊</button>
+    <span id="chat-close" onclick="toggleChat()">✕</span>
+  </div>
+  <div id="chat-messages">
+    <div class="cm-ai">
+      <div class="cm-ai-name" id="i18n-chat-ainame"></div>
+      <div id="chat-greeting">…</div>
+    </div>
+  </div>
+  <div id="chat-footer">
+    <input id="chat-input" type="text" maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
+    <button id="chat-send" onclick="sendChat()"></button>
+  </div>
+</div>
+
+<div id="kouoh-loading">
+  <div class="k-spinner"></div>
+  <div class="k-loading-text" id="kouoh-loading-text"></div>
+</div>
+
+<div id="result-modal">
+  <h2 id="i18n-memory-title" style="color:var(--gold);margin:0;letter-spacing:4px;font-family:'Kaisei Decol',serif;"></h2>
+  <img id="result-image" src="" alt="">
+  <button id="share-btn" onclick="shareExperience()"></button>
+  <p id="save-hint"></p>
+
+  <div id="purchase-section">
+    <div class="purchase-heading" id="i18n-purchase-heading"></div>
+    <div class="purchase-sub">古都の香り — 薫香堂</div>
+    <div class="product-info">
+      <div class="product-icon">🌿</div>
+      <div>
+        <div class="product-name" id="i18n-product-name"></div>
+        <div class="product-price-unit" id="i18n-price-unit"></div>
+      </div>
+    </div>
+    <div class="qty-row">
+      <button class="qty-btn" id="qty-minus" onclick="changeQty(-1)">−</button>
+      <div class="qty-display">
+        <span class="qty-num" id="qty-num">1</span>
+        <span class="qty-unit" id="i18n-qty-unit"></span>
+      </div>
+      <button class="qty-btn" id="qty-plus" onclick="changeQty(+1)">＋</button>
+    </div>
+    <div class="subtotal-row">
+      <span class="subtotal-label" id="i18n-subtotal-label"></span>
+      <span><span class="subtotal-value" id="subtotal-value">¥440</span><span class="subtotal-tax" id="i18n-tax"></span></span>
+    </div>
+    <div id="card-element"></div>
+    <div id="card-errors"></div>
+    <button id="kouoh-btn" onclick="doKouoh()"></button>
+    <div class="purchase-note" id="i18n-purchase-note"></div>
+  </div>
+
+  <div id="purchase-complete">
+    <div class="complete-icon">🌿</div>
+    <div class="complete-title" id="i18n-complete-title"></div>
+    <div class="complete-msg" id="i18n-complete-msg"></div>
+    <div class="txid-box">
+      <div class="txid-label" id="i18n-txid-label"></div>
+      <div class="txid-value" id="purchase-txid">—</div>
+      <div class="txid-note" id="i18n-txid-note"></div>
+    </div>
+  </div>
+
+  <div id="nft-section" class="hidden">
+    <div class="nft-heading" id="i18n-nft-heading"></div>
+    <div class="nft-sub" id="i18n-nft-sub"></div>
+    <div id="nft-form">
+      <input type="email" id="nft-email-input">
+      <button id="nft-send-btn" onclick="doMintNFT()"></button>
+      <button id="nft-skip-btn" onclick="skipNFT()"></button>
+    </div>
+    <div id="nft-complete">
+      <div class="nft-complete-icon">✨</div>
+      <div class="nft-complete-title" id="i18n-nft-done-title"></div>
+      <div class="nft-complete-msg" id="i18n-nft-done-msg"></div>
+      <div class="nft-txid-box">
+        <div class="nft-txid-label" id="i18n-nft-tx-label"></div>
+        <div class="nft-txid-value" id="nft-txid">—</div>
+      </div>
+      <a id="nft-view-btn" href="#" target="_blank"></a>
+    </div>
+  </div>
+
+  <!-- JPYC特典セクション -->
+  <div id="jpyc-section">
+    <div class="jpyc-heading" id="i18n-jpyc-heading"></div>
+    <div class="jpyc-sub" id="i18n-jpyc-sub"></div>
+    <input type="text" id="jpyc-address-input" autocomplete="off">
+    <button id="jpyc-check-btn" onclick="doCheckJpyc()"></button>
+    <div id="jpyc-result"></div>
+  </div>
+
+  <div class="back-btn" id="i18n-back-btn" onclick="closeResultModal()"></div>
+</div>
+
+<a-scene mindar-image="imageTargetSrc:./targets.mind; autoStart:true; uiLoading:no; uiScanning:no;" color-space="sRGB" renderer="colorManagement:true; preserveDrawingBuffer:true; alpha:true; antialias:true;" vr-mode-ui="enabled:false" device-orientation-permission-ui="enabled:false">
+  <a-assets>
+    <a-asset-item id="utsusemiModel" src="./utsusemi.glb"></a-asset-item>
+    <a-asset-item id="yugaoModel" src="./yugao.glb"></a-asset-item>
+    <audio id="ambient-audio" src="./ambient.mp3" preload="auto" loop></audio>
+    <img id="umePetal" src="./ume_petal.png" crossorigin="anonymous">
+  </a-assets>
+
+  <a-entity id="target0" mindar-image-target="targetIndex: 0">
+    <a-entity id="manifestation-utsusemi" visible="false">
+      <a-gltf-model src="#utsusemiModel" position="0 0 0" rotation="180 90 110" scale="1.5 1.5 1.5" animation-mixer follow-empty="targetName: Empty"></a-gltf-model>
+      <a-entity class="smoke-entity"></a-entity>
+      <a-entity class="season-entity" position="0 0.1 0.05"></a-entity>
+    </a-entity>
+  </a-entity>
+
+  <a-entity id="target1" mindar-image-target="targetIndex: 1">
+    <a-entity id="manifestation-yugao" visible="false">
+      <a-gltf-model src="#yugaoModel" position="0 0 0" rotation="180 90 110" scale="1.5 1.5 1.5" animation-mixer follow-empty="targetName: Empty"></a-gltf-model>
+      <a-entity class="smoke-entity"></a-entity>
+      <a-entity class="season-entity" position="0 0.1 0.05"></a-entity>
+    </a-entity>
+  </a-entity>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+</a-scene>
+
+<script>
+  // ══ グローバル変数 ══
+  var LANG = (navigator.language || navigator.userLanguage || 'ja').substring(0,2) === 'ja' ? 'ja' : 'en';
+  var stripeInstance = null;
+  var cardElement = null;
+  var _quantity = 1;
+  var UNIT_PRICE = 440;
+  var MAX_QTY = 10;
+  var _kouoh_amount = UNIT_PRICE;
+  var _purchase_txid = null;
+  var chatHistory = [];
+  var chatSending = false;
+  var currentWeather = 'clear'; 
+  
+  let activeKouoh = 'utsusemi';
+  var isT0Visible = false;
+  var isT1Visible = false;
+
+  var I18N_DICT = {
+    ja: {
+      startDesc: '商品パッケージにカメラを向けると<br>香りのアバターが顕現します<br><br>タップしてはじめる',
+      startCamera: '※ カメラへのアクセスを許可してください',
+      scanMsg: '商品パッケージにカメラを向けてください…',
+      captureBtn: '記憶を留める',
+      chatName: '空蝉',
+      chatAiName: '空蝉',
+      chatPlaceholder: '話しかける…',
+      chatSend: '送る',
+      loading: '処理中...',
+      loadingNFT: 'NFT発行中...',
+      memoryTitle: '香りの記憶',
+      memoryAlt: '香りの記憶',
+      shareBtn: 'SNSで共有する',
+      saveHint: '画像を長押しして保存できます',
+      purchaseHeading: '空蝉 を購入する',
+      productName: '空蝉（匂い袋）<br>古都の香り シリーズ',
+      priceUnit: '¥440 (税込) / 1個',
+      qtyUnit: '個',
+      subtotalLabel: '小計',
+      tax: '（税込）',
+      kouohBtn: '決済して購入証明を発行する',
+      purchaseNote: '購入証明はブロックチェーンに永久保存されます。決済はStripe（PCI-DSS準拠）で保護されます。<br><a href="/legal.html" target="_blank" style="color:rgba(212,175,55,0.4);text-decoration:underline;font-size:10px;">特定商取引法に基づく表記</a>',
+      completeTitle: '購入が完了しました',
+      completeMsg: 'ありがとうございます。<br>お香の購入記録がブロックチェーンに刻まれました。',
+      txidLabel: '購入証明 ID',
+      txidNote: '※ このIDで購入記録をいつでも確認できます',
+      nftHeading: '購入証明NFTを受け取る',
+      nftSub: 'メールアドレスを入力するだけ。ウォレット不要。',
+      emailPlaceholder:'メールアドレス',
+      nftSendBtn: 'NFTを受け取る',
+      nftSkipBtn: 'スキップ',
+      nftDoneTitle: 'NFTが届きました',
+      nftDoneMsg: '購入証明NFTをお送りしました。<br>メールをご確認ください。',
+      nftTxLabel: 'NFT発行 TX',
+      nftViewBtn: 'NFT確認ページで見る',
+      backBtn: '戻る',
+      greetingMsg: 'こんにちは。初めまして。',
+      greetingFallback:'初めてお目にかかります。今、あなたのお手元に香りが届いていることと存じます。',
+      shareText: '古都の香りをARで体験しました。 #香訪AR',
+      mintingBtn: 'NFT発行中…',
+      processingBtn: '処理中...',
+      alertEmail: 'メールアドレスを入力してください',
+      alertPayment: '決済システムの初期化中です。',
+      jpycHeading: '🪙 JPYC特典を確認する',
+      jpycSub: '2000 JPYC以上保有で特別ARエフェクトが解放されます',
+      jpycPlaceholder: 'ウォレットアドレス（0x...）',
+      jpycBtn: '保有を確認する',
+      jpycChecking: '確認中...',
+      jpycSuccess: '✨ 特典解放！次回ARで特別エフェクトが使えます',
+      jpycFail: 'JPYCが不足しています（必要：2000 JPYC以上）',
+      jpycError: '確認に失敗しました。アドレスをご確認ください。',
+    },
+    en: {
+      startDesc: 'Point your camera at the product package<br>and the fragrance avatar will appear<br><br>Tap to begin',
+      startCamera: '※ Please allow camera access',
+      scanMsg: 'Point your camera at the product package…',
+      captureBtn: 'Capture Memory',
+      chatName: 'Utsusemi',
+      chatAiName: 'Utsusemi',
+      chatPlaceholder: 'Talk to Utsusemi…',
+      chatSend: 'Send',
+      loading: 'Processing…',
+      loadingNFT: 'Issuing NFT…',
+      memoryTitle: 'Fragrance Memory',
+      memoryAlt: 'Fragrance Memory',
+      shareBtn: 'Share on SNS',
+      saveHint: 'Long press the image to save',
+      purchaseHeading: 'Purchase Utsusemi',
+      productName: 'Utsusemi (Scent Sachet)<br>Ancient Capital Series',
+      priceUnit: '¥440 (Tax inc) / 1 item',
+      qtyUnit: 'item(s)',
+      subtotalLabel: 'Subtotal',
+      tax: '(Tax inc)',
+      kouohBtn: 'Pay & Issue Proof',
+      purchaseNote: 'Proof of purchase is permanently saved on the blockchain. Payment is protected by Stripe (PCI-DSS compliant).<br><a href="/legal.html" target="_blank" style="color:rgba(212,175,55,0.4);text-decoration:underline;font-size:10px;">Legal Information</a>',
+      completeTitle: 'Purchase Complete',
+      completeMsg: 'Thank you.<br>Your purchase record has been inscribed on the blockchain.',
+      txidLabel: 'Proof ID',
+      txidNote: '* You can check your purchase record anytime with this ID',
+      nftHeading: 'Receive NFT Proof',
+      nftSub: 'Just enter your email. No wallet required.',
+      emailPlaceholder:'Email Address',
+      nftSendBtn: 'Receive NFT',
+      nftSkipBtn: 'Skip',
+      nftDoneTitle: 'NFT Delivered',
+      nftDoneMsg: 'We have sent you the NFT Proof.<br>Please check your email.',
+      nftTxLabel: 'NFT Issuance TX',
+      nftViewBtn: 'View NFT Page',
+      backBtn: 'Back',
+      greetingMsg: 'Hello, nice to meet you.',
+      greetingFallback:'Nice to meet you. I hope the fragrance has reached you safely.',
+      shareText: 'I experienced the Ancient Capital fragrance in AR. #KouohAR',
+      mintingBtn: 'Minting NFT...',
+      processingBtn: 'Processing...',
+      alertEmail: 'Please enter your email address',
+      alertPayment: 'Payment system is initializing.',
+      jpycHeading: '🪙 JPYC Holder Benefits',
+      jpycSub: 'Hold 2000+ JPYC to unlock special AR effects',
+      jpycPlaceholder: 'Wallet Address (0x...)',
+      jpycBtn: 'Check Balance',
+      jpycChecking: 'Checking...',
+      jpycSuccess: '✨ Unlocked! Special AR effects now available',
+      jpycFail: 'Insufficient JPYC (required: 2000 JPYC)',
+      jpycError: 'Verification failed. Please check the address.',
+    }
+  };
+
+  function t(key) { return I18N_DICT[LANG][key] || I18N_DICT['en'][key] || key; }
+
+  function updateI18n() {
+    var setText = function(id, key) { var el = document.getElementById(id); if(el) el.innerText = t(key); };
+    var setHTML = function(id, key) { var el = document.getElementById(id); if(el) el.innerHTML = t(key); };
+    var setAttr = function(id, attr, key) { var el = document.getElementById(id); if(el) el.setAttribute(attr, t(key)); };
+
+    setHTML('i18n-start-desc', 'startDesc');
+    setText('i18n-start-camera', 'startCamera');
+    setText('scan-msg', 'scanMsg');
+    setText('capture-btn', 'captureBtn');
+    setText('i18n-chat-name', 'chatName');
+    setText('i18n-chat-ainame', 'chatAiName');
+    setAttr('chat-input', 'placeholder', 'chatPlaceholder');
+    setText('chat-send', 'chatSend');
+    setText('i18n-memory-title', 'memoryTitle');
+    setAttr('result-image', 'alt', 'memoryAlt');
+    setText('share-btn', 'shareBtn');
+    setText('save-hint', 'saveHint');
+    setText('i18n-purchase-heading', 'purchaseHeading');
+    setHTML('i18n-product-name', 'productName');
+    setText('i18n-price-unit', 'priceUnit');
+    setText('i18n-qty-unit', 'qtyUnit');
+    setText('i18n-subtotal-label', 'subtotalLabel');
+    setText('i18n-tax', 'tax');
+    setText('kouoh-btn', 'kouohBtn');
+    setHTML('i18n-purchase-note', 'purchaseNote');
+    setText('i18n-complete-title', 'completeTitle');
+    setHTML('i18n-complete-msg', 'completeMsg');
+    setText('i18n-txid-label', 'txidLabel');
+    setText('i18n-txid-note', 'txidNote');
+    setText('i18n-nft-heading', 'nftHeading');
+    setText('i18n-nft-sub', 'nftSub');
+    setAttr('nft-email-input', 'placeholder', 'emailPlaceholder');
+    setText('nft-send-btn', 'nftSendBtn');
+    setText('nft-skip-btn', 'nftSkipBtn');
+    setText('i18n-nft-done-title', 'nftDoneTitle');
+    setHTML('i18n-nft-done-msg', 'nftDoneMsg');
+    setText('i18n-nft-tx-label', 'nftTxLabel');
+    setText('nft-view-btn', 'nftViewBtn');
+    setText('i18n-back-btn', 'backBtn');
+    setText('i18n-jpyc-heading', 'jpycHeading');
+    setText('i18n-jpyc-sub', 'jpycSub');
+    setAttr('jpyc-address-input', 'placeholder', 'jpycPlaceholder');
+    setText('jpyc-check-btn', 'jpycBtn');
+    
+    updateKouohUI();
+  }
+
+  function updateKouohUI() {
+    var isYugao = activeKouoh === 'yugao';
+    var nameJa = isYugao ? '夕顔' : '空蝉';
+    var nameEn = isYugao ? 'Yugao' : 'Utsusemi';
+    var currentName = LANG === 'ja' ? nameJa : nameEn;
+
+    var chatNameEl = document.getElementById('i18n-chat-name');
+    if(chatNameEl) chatNameEl.innerText = currentName;
+    
+    var chatAiNameEl = document.getElementById('i18n-chat-ainame');
+    if(chatAiNameEl) chatAiNameEl.innerText = currentName;
+
+    document.querySelectorAll('.cm-ai-name').forEach(function(el) {
+      el.innerText = currentName;
+    });
+
+    var purchaseHeading = document.getElementById('i18n-purchase-heading');
+    if(purchaseHeading) purchaseHeading.innerText = LANG === 'ja' ? nameJa + ' を購入する' : 'Purchase ' + nameEn;
+    
+    var productName = document.getElementById('i18n-product-name');
+    if(productName) productName.innerHTML = LANG === 'ja' ? nameJa + '（匂い袋）<br>古都の香り シリーズ' : nameEn + ' (Sachet)<br>Ancient Capital Series';
+
+    var chatBtn = document.getElementById('chat-btn');
+    if(chatBtn) chatBtn.title = LANG === 'ja' ? nameJa + 'に話しかける' : 'Talk to ' + nameEn;
+  }
+
+  function initStripe() {
+    if (!window.Stripe) return;
+    try {
+      stripeInstance = Stripe('pk_test_51TCWBVB1c7PEb1zFztMExsSXZWRs7LoIIJ0h9k2YZezwtLjLdZ0Gwb8huiX3MoYWLFZmUasyI6SArdHLRZzL7XJW00UaIXWSmW'); // ★ご自身の公開キー
+      var elements = stripeInstance.elements();
+      var style = {
+        base: { color: '#fff', fontFamily: '"Kaisei Decol", serif', fontSize: '15px', '::placeholder': { color: 'rgba(255,255,255,0.4)' } },
+        invalid: { color: '#ff6b6b', iconColor: '#ff6b6b' }
+      };
+      cardElement = elements.create('card', { style: style, hidePostalCode: true });
+      cardElement.mount('#card-element');
+      cardElement.on('change', function(event) {
+        var displayError = document.getElementById('card-errors');
+        displayError.textContent = event.error ? event.error.message : '';
+      });
+    } catch(e) { console.error('Stripe init error', e); }
+  }
+
+  AFRAME.registerComponent('follow-empty', {
+    schema: { targetName: { type: 'string', default: 'Empty' } },
+    init: function() {
+      this.smokeEl = this.el.parentNode.querySelector('.smoke-entity');
+      this.targetObj = null;
+      var self = this;
+      this.el.addEventListener('model-loaded', function() {
+        var mesh = self.el.getObject3D('mesh');
+        if (mesh) {
+          mesh.traverse(function(node) {
+            if (node.name === self.data.targetName) {
+              self.targetObj = node;
+            }
+          });
+        }
+      });
+    },
+    tick: function() {
+      if (this.targetObj && this.smokeEl) {
+        var pos = new THREE.Vector3();
+        this.targetObj.getWorldPosition(pos);
+        var localPos = this.smokeEl.parentNode.object3D.worldToLocal(pos);
+        this.smokeEl.setAttribute('position', localPos);
+      }
+    }
+  });
+
+  AFRAME.registerComponent('incense-smoke', {
+    init: function() {
+      this.particles = [];
+      var count = 30;
+      for (var i = 0; i < count; i++) {
+        var el = document.createElement('a-sphere');
+        el.setAttribute('radius', '0.015');
+        el.setAttribute('material', 'shader:flat; transparent:true; opacity:0; color:#ddd; depthWrite:false');
+        this.el.appendChild(el);
+        this.particles.push({
+          el: el,
+          y: Math.random() * 0.4,
+          speed: 0.0001 + Math.random() * 0.0001, 
+          phase: Math.random() * Math.PI * 2,
+          swaySpeed: 0.001 + Math.random() * 0.0005 
+        });
+      }
+    },
+    tick: function(time, delta) {
+      if (delta > 100) delta = 16;
+      for (var i = 0; i < this.particles.length; i++) {
+        var p = this.particles[i];
+        p.y += p.speed * delta;
+        if (p.y > 0.4) p.y = 0;
+        
+        var swayTime = time * p.swaySpeed + p.phase;
+        var x = Math.sin(swayTime) * 0.02 * (p.y / 0.4);
+        var z = Math.cos(swayTime * 0.8) * 0.01;
+        
+        p.el.setAttribute('position', x + ' ' + p.y + ' ' + z);
+        var alpha = (1.0 - (p.y / 0.4)) * 0.4;
+        p.el.setAttribute('material', 'opacity', alpha);
+      }
+    }
+  });
+
+  AFRAME.registerComponent('seasonal-effect', {
+    init: function() {
+      this.season = getSeason();
+      this.particles = [];
+      var season = this.season;
+      var colors = { summer: ['#aaff66','#88ff44','#ccff88'], autumn: ['#cc3300','#ff6600','#cc6600'], winter: ['#ddeeff','#eef4ff','#ffffff'] };
+      var count = 25;
+      for (var i = 0; i < count; i++) {
+        var el;
+        if (season === 'spring') {
+          el = document.createElement('a-plane');
+          var sz = (0.04 + Math.random() * 0.04).toFixed(3);
+          el.setAttribute('width', sz);
+          el.setAttribute('height', sz);
+          el.setAttribute('material', 'src: #umePetal; shader:flat; transparent:true; opacity:0; alphaTest:0.05; depthWrite:false; side:double');
+          el.setAttribute('rotation', '0 0 ' + Math.round(Math.random() * 360));
+        } else {
+          el = document.createElement('a-sphere');
+          var r = season === 'summer' ? '0.008' : '0.014';
+          el.setAttribute('radius', r);
+          var palette = colors[season] || ['#ffffff'];
+          var c = palette[Math.floor(Math.random() * palette.length)];
+          el.setAttribute('material', 'shader:flat; transparent:true; opacity:0; color:' + c + '; depthWrite:false');
+        }
+        this.el.appendChild(el);
+        this.particles.push({
+          el: el,
+          x: (Math.random() - 0.5) * 0.9,
+          z: Math.random() * 1.2,
+          y: (Math.random() - 0.5) * 0.9,
+          speed: 0.00005 + Math.random() * 0.0001, 
+          rotSpeed: (Math.random() - 0.5) * 0.15   
+        });
+      }
+    },
+    tick: function(time, delta) {
+      if (delta > 100) delta = 16;
+      for (var i = 0; i < this.particles.length; i++) {
+        var p = this.particles[i];
+        p.y -= p.speed * delta;
+        if (p.y < -0.4) { p.y = 0.6; p.x = (Math.random() - 0.5) * 0.9; }
+        p.el.setAttribute('position', p.x + ' ' + p.y + ' ' + p.z);
+        if (this.season === 'spring') {
+          var currRot = p.el.getAttribute('rotation') || {x:0, y:0, z:0};
+          p.el.setAttribute('rotation', currRot.x + ' ' + currRot.y + ' ' + (currRot.z + p.rotSpeed * delta));
+        }
+        var alpha = 1.0;
+        if (p.y < -0.2) alpha = (p.y + 0.4) / 0.2;
+        else if (p.y > 0.4) alpha = (0.6 - p.y) / 0.2;
+        p.el.setAttribute('material', 'opacity', alpha * 0.7);
+      }
+    }
+  });
+
+  function getTimeSlot() {
+    var h = new Date().getHours();
+    if (h >= 5 && h < 11) return 'morning';
+    if (h >= 11 && h < 16) return 'midday';
+    if (h >= 16 && h < 19) return 'evening';
+    return 'night';
+  }
+  function getSeason() {
+    var m = new Date().getMonth() + 1;
+    if (m >= 3 && m <= 5) return 'spring';
+    if (m >= 6 && m <= 8) return 'summer';
+    if (m >= 9 && m <= 11) return 'autumn';
+    return 'winter';
+  }
+
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=35.0116&longitude=135.7681&current_weather=true')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var code = d.current_weather.weathercode;
+      if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) currentWeather = 'rain';
+      else if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) currentWeather = 'snow';
+    }).catch(function(){});
+
+  var fadeAudioInterval = null;
+  function fadeAudio(targetVol, duration) {
+    var audioEl = document.getElementById('ambient-audio');
+    if (!audioEl) return;
+    
+    if (fadeAudioInterval) {
+      clearInterval(fadeAudioInterval);
+      fadeAudioInterval = null;
+    }
+    
+    var startVol = audioEl.volume;
+    var steps = 20;
+    var stepTime = duration / steps;
+    var volDiff = targetVol - startVol;
+    var currentStep = 0;
+    
+    if (targetVol > 0 && audioEl.paused) {
+      audioEl.play().catch(function(){});
+    }
+    
+    fadeAudioInterval = setInterval(function() {
+      currentStep++;
+      var newVol = startVol + (volDiff * (currentStep / steps));
+      if(newVol < 0) newVol = 0;
+      if(newVol > 1) newVol = 1;
+      audioEl.volume = newVol;
+      
+      if (currentStep >= steps) {
+        clearInterval(fadeAudioInterval);
+        fadeAudioInterval = null;
+        audioEl.volume = targetVol;
+        if(targetVol === 0) audioEl.pause();
+      }
+    }, stepTime);
+  }
+
+  var audioUnlocked = false; 
+  function startExperience() {
+    var overlay = document.getElementById('start-overlay');
+    overlay.style.opacity = '0';
+    setTimeout(function() {
+      overlay.style.display = 'none';
+      document.getElementById('scan-overlay').style.display = 'flex';
+    }, 1200);
+
+    var audioEl = document.getElementById('ambient-audio');
+    if (!audioUnlocked) {
+      audioEl.volume = 0;
+      audioEl.play().then(function() {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+        audioEl.volume = 0;
+        audioUnlocked = true;
+      }).catch(function(){ audioUnlocked = true; });
+    }
+  }
+
+  var target0 = document.querySelector('#target0');
+  var target1 = document.querySelector('#target1');
+
+  // JPYC保有チェック（AR起動毎回APIで確認）
+  function checkJpycAndApplyEffect(manifestEl, modelEl) {
+    var savedData = null;
+    try { savedData = JSON.parse(localStorage.getItem('jpyc_holder') || 'null'); } catch(e) {}
+    if (!savedData || !savedData.address) {
+      // 保存アドレスなし → 通常表示
+      if (modelEl) modelEl.setAttribute('scale', '1.5 1.5 1.5');
+      return;
+    }
+    // 保存アドレスあり → APIで残高をリアルタイム確認
+    fetch('/api/check-jpyc?address=' + encodeURIComponent(savedData.address))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.isHolder) {
+          // 特典適用
+          if (modelEl) modelEl.setAttribute('scale', '2.0 2.0 2.0');
+          if (!manifestEl.querySelector('[jpyc-halo]')) {
+            var haloEl = document.createElement('a-entity');
+            haloEl.setAttribute('jpyc-halo', '');
+            manifestEl.appendChild(haloEl);
+          }
+        } else {
+          // JPYC残高不足 → 特典失効・LocalStorage削除
+          localStorage.removeItem('jpyc_holder');
+          if (modelEl) modelEl.setAttribute('scale', '1.5 1.5 1.5');
+          // 光の輪があれば削除
+          var existingHalo = manifestEl.querySelector('[jpyc-halo]');
+          if (existingHalo) existingHalo.parentNode.removeChild(existingHalo);
+          console.log('[JPYC] 残高不足のため特典失効');
+        }
+      })
+      .catch(function(){
+        // API失敗時は前回の状態を維持（通常表示）
+        if (modelEl) modelEl.setAttribute('scale', '1.5 1.5 1.5');
+      });
+  }
+
+  // JPYC特典：光の輪エフェクト（A-Frameコンポーネント）
+  AFRAME.registerComponent('jpyc-halo', {
+    init: function() {
+      // 外輪
+      var ring1 = document.createElement('a-torus');
+      ring1.setAttribute('radius', '0.38');
+      ring1.setAttribute('radius-tubular', '0.012');
+      ring1.setAttribute('segments-tubular', '64');
+      ring1.setAttribute('material', 'shader:flat; color:#D4AF37; transparent:true; opacity:0.85; depthWrite:false');
+      ring1.setAttribute('rotation', '90 0 0');
+      ring1.setAttribute('position', '0 0.05 0');
+      ring1.setAttribute('animation', 'property:rotation; from:90 0 0; to:90 360 0; loop:true; dur:4000; easing:linear');
+      // 内輪
+      var ring2 = document.createElement('a-torus');
+      ring2.setAttribute('radius', '0.28');
+      ring2.setAttribute('radius-tubular', '0.007');
+      ring2.setAttribute('segments-tubular', '48');
+      ring2.setAttribute('material', 'shader:flat; color:#ffe87c; transparent:true; opacity:0.6; depthWrite:false');
+      ring2.setAttribute('rotation', '90 0 0');
+      ring2.setAttribute('position', '0 0.05 0');
+      ring2.setAttribute('animation', 'property:rotation; from:90 0 0; to:90 -360 0; loop:true; dur:2800; easing:linear');
+      // 光点（散りばめた小さい光）
+      for (var i = 0; i < 8; i++) {
+        var dot = document.createElement('a-sphere');
+        dot.setAttribute('radius', '0.018');
+        dot.setAttribute('material', 'shader:flat; color:#fff8dc; transparent:true; opacity:0.9; depthWrite:false');
+        var angle = (i / 8) * Math.PI * 2;
+        var r = 0.38;
+        dot.setAttribute('position', (Math.cos(angle)*r) + ' 0.05 ' + (Math.sin(angle)*r));
+        dot.setAttribute('animation', 'property:material.opacity; from:0.9; to:0.2; loop:true; dur:' + (800 + i*120) + '; direction:alternate; easing:easeInOutSine');
+        this.el.appendChild(dot);
+      }
+      this.el.appendChild(ring1);
+      this.el.appendChild(ring2);
+      this.ring1 = ring1;
+      this.ring2 = ring2;
+    }
+  });
+
+  function handleTargetFound(type) {
+    activeKouoh = type;
+    updateKouohUI(); 
+
+    // ★追加: スキャン要求画面を隠す
+    document.getElementById('scan-overlay').style.display = 'none';
+
+    var isYugao = type === 'yugao';
+    var manifestEl = document.querySelector(isYugao ? '#manifestation-yugao' : '#manifestation-utsusemi');
+    var smokeEl = manifestEl.querySelector('.smoke-entity');
+    var seasonEl = manifestEl.querySelector('.season-entity');
+    var modelEl = manifestEl.querySelector('a-gltf-model');
+
+    try {
+      manifestEl.setAttribute('visible', true);
+      if (!smokeEl.components['incense-smoke']) smokeEl.setAttribute('incense-smoke', '');
+      if (!seasonEl.components['seasonal-effect']) seasonEl.setAttribute('seasonal-effect', '');
+
+      // ── JPYC特典エフェクト（毎回APIで残高確認）──────────────────
+      checkJpycAndApplyEffect(manifestEl, modelEl);
+      // ────────────────────────────────────────────────────────────
+      
+      document.getElementById('capture-btn').style.display = 'block';
+      document.getElementById('chat-btn').style.display = 'block';
+
+      fadeAudio(0.35, 1000);
+    } catch(e) { console.warn('[AR]', e); }
+  }
+
+  function handleTargetLost(type) {
+    var isYugao = type === 'yugao';
+    var manifestEl = document.querySelector(isYugao ? '#manifestation-yugao' : '#manifestation-utsusemi');
+    if(manifestEl) manifestEl.setAttribute('visible', false);
+    
+    if (!isT0Visible && !isT1Visible) {
+      document.getElementById('capture-btn').style.display = 'none';
+      document.getElementById('chat-btn').style.display = 'none';
+      
+      // ★追加: ARモデルを見失ったら再度スキャン要求画面を表示する
+      document.getElementById('scan-overlay').style.display = 'flex';
+      
+      fadeAudio(0.0, 1000);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    updateI18n();
+
+    if(target0) {
+      target0.addEventListener('targetFound', function() { isT0Visible = true; handleTargetFound('utsusemi'); });
+      target0.addEventListener('targetLost', function() { isT0Visible = false; handleTargetLost('utsusemi'); });
+    }
+    if(target1) {
+      target1.addEventListener('targetFound', function() { isT1Visible = true; handleTargetFound('yugao'); });
+      target1.addEventListener('targetLost', function() { isT1Visible = false; handleTargetLost('yugao'); });
+    }
+    
+    document.getElementById('chat-greeting').innerText = t('greetingFallback');
+  });
+
+  var MEMORY_KEY = 'kouoh_memories';
+  var MEMORY_MAX = 5;
+  function saveMemory(entry) {
+    var list = loadMemories();
+    list.unshift(entry);
+    if (list.length > MEMORY_MAX) list = list.slice(0, MEMORY_MAX);
+    try { localStorage.setItem(MEMORY_KEY, JSON.stringify(list)); } catch(e) {}
+  }
+  function loadMemories() {
+    try { return JSON.parse(localStorage.getItem(MEMORY_KEY) || '[]'); } catch(e) { return []; }
+  }
+  function updateMemoryTxid(txid) {
+    var list = loadMemories();
+    if (list.length > 0) {
+      list[0].txid = txid; 
+      try { localStorage.setItem(MEMORY_KEY, JSON.stringify(list)); } catch(e) {}
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x + r, y, x + r, y);
+    ctx.closePath();
+  }
+
+  document.getElementById('capture-btn').addEventListener('click', function() {
+    var btn = this;
+    btn.innerText = '…';
+    
+    setTimeout(function() {
+      var video = document.querySelector('video');
+      var arCanvas = document.querySelector('.a-canvas');
+      var sceneEl = document.querySelector('a-scene');
+
+      if (!video || !arCanvas || !sceneEl) {
+        btn.innerText = t('captureBtn');
+        return;
+      }
+
+      var tempCanvas = document.createElement('canvas');
+      var ctx = tempCanvas.getContext('2d');
+
+      var W = arCanvas.width;
+      var H = arCanvas.height;
+      tempCanvas.width = W;
+      tempCanvas.height = H;
+
+      var vw = video.videoWidth;
+      var vh = video.videoHeight;
+      if (vw > 0 && vh > 0) {
+        var vAspect = vw / vh;
+        var cAspect = W / H;
+        var sx, sy, sw, sh;
+        if (vAspect > cAspect) {
+          sh = vh;
+          sw = vh * cAspect;
+          sx = (vw - sw) / 2;
+          sy = 0;
+        } else {
+          sw = vw;
+          sh = vw / cAspect;
+          sx = 0;
+          sy = (vh - sh) / 2;
+        }
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, W, H);
+      }
+
+      if (sceneEl.renderer && sceneEl.object3D && sceneEl.camera) {
+        sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+      }
+      
+      ctx.drawImage(arCanvas, 0, 0, W, H);
+
+      var dpr_draw = W / window.innerWidth;
+      if (!dpr_draw || isNaN(dpr_draw) || dpr_draw < 0.5) dpr_draw = window.devicePixelRatio || 2;
+      
+      var SEASON_LABEL = { spring:'春', summer:'夏', autumn:'秋', winter:'冬' };
+      var WEATHER_LABEL = { clear:'晴れ', rain:'雨', snow:'雪' };
+      var TIME_LABEL = { morning:'朝', midday:'昼', evening:'夕方', night:'夜' };
+      var SEASON_EMOJI = { spring:'🌸', summer:'🌿', autumn:'🍂', winter:'❄️' };
+
+      var seasonKey = getSeason();
+      var weatherKey = currentWeather; 
+      var timeKey = getTimeSlot();
+      var seasonText = SEASON_LABEL[seasonKey] || '春';
+      var weatherText = WEATHER_LABEL[weatherKey] || '晴れ';
+      var timeText = TIME_LABEL[timeKey] || '昼';
+      var emoji = SEASON_EMOJI[seasonKey] || '🌸';
+
+      var now = new Date();
+      var dateText = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0');
+
+      var fs = Math.round(13 * dpr_draw);
+      var fsSmall = Math.round(11 * dpr_draw);
+      var pad = Math.round(10 * dpr_draw);
+      var lineH = Math.round(18 * dpr_draw);
+      var lines = [
+        emoji + ' ' + seasonText + ' ／ ' + weatherText,
+        '⏱ ' + timeText,
+        '📅 ' + dateText,
+        '✦ 香訪 (Kouoh) AR'
+      ];
+
+      ctx.font = fs + 'px sans-serif';
+      var maxW = 0;
+      lines.forEach(function(l) { maxW = Math.max(maxW, ctx.measureText(l).width); });
+      var pW = maxW + pad * 2;
+      var pH = lines.length * lineH + pad * 2 - (lineH - fs);
+      var pX = W - pW - pad;
+      var pY = H - pH - pad;
+
+      ctx.fillStyle = 'rgba(26,18,8,0.7)';
+      roundRect(ctx, pX, pY, pW, pH, Math.round(8*dpr_draw));
+      ctx.fill();
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      lines.forEach(function(l, i) {
+        ctx.fillStyle = (i === lines.length - 1) ? '#D4AF37' : '#FFFFFF';
+        ctx.font = (i === lines.length - 1) ? 'bold ' + fsSmall + 'px sans-serif' : fs + 'px sans-serif';
+        ctx.fillText(l, pX + pad, pY + pad + (i * lineH));
+      });
+
+      var dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85);
+
+      document.getElementById('result-image').src = dataUrl;
+      document.getElementById('result-modal').style.display = 'flex';
+      document.getElementById('capture-btn').style.display = 'none';
+
+      var lastLine = null;
+      for (var ci = chatHistory.length - 1; ci >= 0; ci--) {
+        if (chatHistory[ci].role === 'assistant') {
+          lastLine = chatHistory[ci].content;
+          break;
+        }
+      }
+
+      saveMemory({
+        id: 'mem_' + Date.now(),
+        date: dateText,
+        season: seasonKey,
+        weather: weatherKey,
+        timeOfDay: timeKey,
+        utsusemiLine: lastLine,
+        imageDataUrl: dataUrl,
+        txid: null
+      });
+
+      initStripe();
+      btn.innerText = t('captureBtn');
+      
+    }, 50); 
+  });
+
+  var ttsEnabled = true;
+  var ttsSpeaking = false;
+  function speakAi(text) {
+    if (!ttsEnabled || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    
+    var utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'ja-JP'; utt.rate = 0.88; utt.pitch = 1.05; utt.volume = 0.9;
+    
+    var voices = window.speechSynthesis.getVoices();
+    var jaVoice = voices.find(function(v){ return v.lang === 'ja-JP'; });
+    if (jaVoice) utt.voice = jaVoice;
+
+    var audioEl = document.getElementById('ambient-audio');
+    var isPlaying = !audioEl.paused && audioEl.volume > 0;
+    if (isPlaying) fadeAudio(0.35 * 0.4, 400);
+    
+    utt.onstart = function(){ ttsSpeaking = true; };
+    utt.onend = function(){
+      ttsSpeaking = false;
+      if (isPlaying) fadeAudio(0.35, 800);
+    };
+    utt.onerror = function(){
+      ttsSpeaking = false;
+      if (isPlaying) fadeAudio(0.35, 800);
+    };
+    window.speechSynthesis.speak(utt);
+  }
+
+  function toggleChat() { document.getElementById('chat-panel').classList.toggle('open'); }
+  function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    var btn = document.getElementById('tts-btn');
+    btn.innerText = ttsEnabled ? '🔊' : '🔇';
+    btn.style.opacity = ttsEnabled ? '1' : '0.4';
+    if (!ttsEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+  function escH(s) { return !s ? '' : s.replace(/[&'`"<>]/g, function(m) { return { '&': '&amp;', "'": '&#x27;', '`': '&#x60;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[m]; }); }
+
+  function appendUserMsg(text) {
+    var msgs = document.getElementById('chat-messages');
+    var d = document.createElement('div');
+    d.className = 'cm-user'; d.innerHTML = '<span>' + escH(text) + '</span>';
+    msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function appendAiMsg(text) {
+    var msgs = document.getElementById('chat-messages');
+    var d = document.createElement('div');
+    d.className = 'cm-ai';
+    var aiName = activeKouoh === 'yugao' ? (LANG === 'ja' ? '夕顔' : 'Yugao') : (LANG === 'ja' ? '空蝉' : 'Utsusemi');
+    d.innerHTML = '<div class="cm-ai-name">' + aiName + '</div><div>' + escH(text) + '</div>';
+    msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function appendAiLoading() {
+    var msgs = document.getElementById('chat-messages');
+    var id = 'cl-' + Date.now();
+    var d = document.createElement('div');
+    d.className = 'cm-ai'; d.id = id;
+    var aiName = activeKouoh === 'yugao' ? (LANG === 'ja' ? '夕顔' : 'Yugao') : (LANG === 'ja' ? '空蝉' : 'Utsusemi');
+    d.innerHTML = '<div class="cm-ai-name">' + aiName + '</div><div class="cm-dots"><span></span><span></span><span></span></div>';
+    msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+    return id;
+  }
+
+  function removeMsg(id) { var el = document.getElementById(id); if (el) el.remove(); }
+
+  function sendChat() {
+    if (chatSending) return;
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    chatSending = true;
+    appendUserMsg(text);
+    chatHistory.push({ role: 'user', content: text });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+    
+    var loadId = appendAiLoading();
+
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: chatHistory,
+        season: getSeason(),
+        weather: currentWeather,
+        timeOfDay: getTimeSlot(),
+        lang: LANG,
+        kouoh_type: activeKouoh
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      removeMsg(loadId);
+      if (data.reply) {
+        appendAiMsg(data.reply);
+        chatHistory.push({ role: 'assistant', content: data.reply });
+        speakAi(data.reply);
+      } else {
+        appendAiMsg(LANG === 'ja' ? '声が届きませんでした。' : 'The voice did not reach.');
+      }
+    })
+    .catch(function(){
+      removeMsg(loadId);
+      appendAiMsg(LANG === 'ja' ? '接続が乱れてしまいました。もう一度、話しかけてみてください。' : 'The connection was lost. Please try again.');
+    })
+    .finally(function(){ chatSending = false; });
+  }
+
+  function showLoading(text) { document.getElementById('kouoh-loading-text').innerText = text; document.getElementById('kouoh-loading').classList.add('show'); }
+  function hideLoading() { document.getElementById('kouoh-loading').classList.remove('show'); }
+
+  function changeQty(diff) {
+    var next = _quantity + diff;
+    if (next < 1 || next > MAX_QTY) return;
+    _quantity = next;
+    _kouoh_amount = UNIT_PRICE * _quantity;
+    document.getElementById('qty-num').textContent = _quantity;
+    document.getElementById('subtotal-value').textContent = '¥' + _kouoh_amount.toLocaleString();
+    document.getElementById('qty-minus').style.opacity = _quantity <= 1 ? '0.3' : '1';
+    document.getElementById('qty-plus').style.opacity = _quantity >= MAX_QTY ? '0.3' : '1';
+  }
+
+  function doKouoh() {
+    if (!stripeInstance) { alert(t('alertPayment')); return; }
+    var btn = document.getElementById('kouoh-btn');
+    btn.disabled = true; btn.textContent = t('processingBtn');
+    showLoading(t('loading'));
+
+    fetch('/api/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: _kouoh_amount,
+        scentType: activeKouoh,
+        product: activeKouoh === 'yugao' ? '夕顔' : '空蝉',
+        quantity: _quantity,
+        season: getSeason(),
+        weather: currentWeather,
+        timeOfDay: getTimeSlot()
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) throw new Error(data.error);
+      return stripeInstance.confirmCardPayment(data.clientSecret, { payment_method: { card: cardElement } });
+    })
+    .then(function(result) {
+      if (result.error) throw result.error;
+      _purchase_txid = result.paymentIntent.id;
+      updateMemoryTxid(_purchase_txid);
+      hideLoading();
+      showPurchaseComplete(_purchase_txid);
+    })
+    .catch(function(err) {
+      hideLoading();
+      document.getElementById('card-errors').textContent = err.message || 'エラーが発生しました';
+      btn.disabled = false; btn.textContent = t('kouohBtn');
+    });
+  }
+
+  function showPurchaseComplete(txid) {
+    document.getElementById('purchase-section').classList.add('hidden');
+    document.getElementById('purchase-complete').classList.add('show');
+    document.getElementById('purchase-txid').textContent = txid;
+    document.getElementById('nft-section').classList.remove('hidden');
+  }
+
+  function doMintNFT() {
+    var email = document.getElementById('nft-email-input').value.trim();
+    if(!email) { alert(t('alertEmail')); return; }
+    var btn = document.getElementById('nft-send-btn');
+    btn.disabled = true; btn.textContent = t('mintingBtn');
+    showLoading(t('loadingNFT'));
+
+    fetch('/api/mint-nft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email,
+        txid: _purchase_txid,
+        kouoh_type: activeKouoh,
+        season: getSeason(),
+        weather: currentWeather,
+        timeOfDay: getTimeSlot()
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      hideLoading();
+      if(data.error) throw new Error(data.error);
+      if(data.txHash) updateMemoryTxid(data.txHash);
+      showNFTComplete(data.txHash, data.openseaUrl);
+    })
+    .catch(function(e){
+      hideLoading();
+      alert('NFT発行エラー: ' + e.message);
+      btn.disabled = false; btn.textContent = t('nftSendBtn');
+    });
+  }
+
+  function skipNFT() { document.getElementById('nft-section').classList.add('hidden'); }
+
+  function doCheckJpyc() {
+    var address = document.getElementById('jpyc-address-input').value.trim();
+    var result = document.getElementById('jpyc-result');
+    if (!address || !address.startsWith('0x') || address.length !== 42) {
+      result.className = 'fail';
+      result.textContent = t('jpycError');
+      return;
+    }
+    var btn = document.getElementById('jpyc-check-btn');
+    btn.disabled = true;
+    btn.textContent = t('jpycChecking');
+    result.className = '';
+    result.textContent = '';
+
+    fetch('/api/check-jpyc?address=' + encodeURIComponent(address))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.error) throw new Error(data.error);
+        if (data.isHolder) {
+          localStorage.setItem('jpyc_holder', JSON.stringify({
+            address: address,
+            totalJpyc: data.totalJpyc,
+            unlockedAt: new Date().toISOString()
+          }));
+          result.className = 'success';
+          result.textContent = t('jpycSuccess') + '（' + data.totalJpyc + ' JPYC）';
+        } else {
+          result.className = 'fail';
+          result.textContent = t('jpycFail') + '（現在：' + data.totalJpyc + ' JPYC）';
+        }
+      })
+      .catch(function(){
+        result.className = 'fail';
+        result.textContent = t('jpycError');
+      })
+      .finally(function(){
+        btn.disabled = false;
+        btn.textContent = t('jpycBtn');
+      });
+  }
+
+  function showNFTComplete(txHash, url) {
+    document.getElementById('nft-form').style.display = 'none';
+    document.getElementById('nft-complete').classList.add('show');
+    document.getElementById('nft-txid').textContent = txHash || 'Processing...';
+    if(url) {
+      var viewBtn = document.getElementById('nft-view-btn');
+      viewBtn.href = url; viewBtn.style.display = 'block';
+    }
+    // JPYC特典セクションを表示
+    document.getElementById('jpyc-section').classList.add('show');
+  }
+
+  function shareExperience() {
+    var txt = t('shareText');
+    var url = window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: '香訪 AR', text: txt, url: url }).catch(function(){});
+    } else {
+      var twUrl = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(txt + '\n' + url);
+      window.open(twUrl, '_blank');
+    }
+  }
+
+  function closeResultModal() {
+    document.getElementById('result-modal').style.display = 'none';
+    document.getElementById('purchase-section').classList.remove('hidden');
+    document.getElementById('purchase-complete').classList.remove('show');
+    document.getElementById('nft-section').classList.add('hidden');
+    document.getElementById('nft-form').style.display = 'block';
+    document.getElementById('nft-complete').classList.remove('show');
+    
+    var kouohBtn = document.getElementById('kouoh-btn');
+    kouohBtn.disabled = false;
+    kouohBtn.textContent = t('kouohBtn');
+    
+    var nftBtn = document.getElementById('nft-send-btn');
+    nftBtn.disabled = false;
+    nftBtn.textContent = t('nftSendBtn');
+
+    if (isT0Visible || isT1Visible) document.getElementById('capture-btn').style.display = 'block';
+    // JPYCセクションを非表示に戻す
+    var jpycSection = document.getElementById('jpyc-section');
+    if (jpycSection) {
+      jpycSection.classList.remove('show');
+      document.getElementById('jpyc-address-input').value = '';
+      document.getElementById('jpyc-result').className = '';
+      document.getElementById('jpyc-result').textContent = '';
+    }
+  }
+</script>
+</body>
+</html>

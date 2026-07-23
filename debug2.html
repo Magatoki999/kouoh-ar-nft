@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Debug2</title>
+  <style>
+    body { background:#111; color:#0f0; font-family:monospace; font-size:12px; padding:12px; margin:0; }
+    .err  { color:#f55; }
+    .ok   { color:#5f5; }
+    .warn { color:#fa0; }
+    pre   { white-space:pre-wrap; word-break:break-all; margin:0; }
+  </style>
+</head>
+<body>
+<pre id="log">診断中...\n</pre>
+
+<script>
+const log = document.getElementById('log');
+function p(msg, cls='') {
+  const s = document.createElement('span');
+  s.className = cls;
+  s.textContent = msg + '\n';
+  log.appendChild(s);
+}
+
+// ══ グローバルエラー捕捉 ══
+window.onerror = function(msg, src, line, col, err) {
+  p('❌ JS ERROR: ' + msg, 'err');
+  p('   file: ' + src, 'err');
+  p('   line: ' + line + ', col: ' + col, 'err');
+  if (err && err.stack) p('   stack: ' + err.stack.split('\n').slice(0,3).join(' | '), 'err');
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  p('❌ Promise rejection: ' + e.reason, 'err');
+});
+
+p('=== index.html スクリプト実行テスト ===');
+p('スクリプト読み込み中...');
+</script>
+
+<!-- index.html と全く同じ外部スクリプト -->
+<script src="https://js.stripe.com/v3/"
+  onload="p('✅ Stripe loaded','ok')"
+  onerror="p('❌ Stripe FAILED','err')"></script>
+
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"
+  onload="p('✅ AFrame loaded','ok')"
+  onerror="p('❌ AFrame FAILED','err')"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"
+  onload="p('✅ MindAR loaded','ok')"
+  onerror="p('❌ MindAR FAILED','err')"></script>
+
+<script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"
+  onload="p('✅ AFrame-extras loaded','ok')"
+  onerror="p('❌ AFrame-extras FAILED','err')"></script>
+
+<script>
+// ══ index.html の <script> ブロックを fetch して実行 ══
+window.addEventListener('load', function() {
+  p('\n=== index.html スクリプト抽出・実行 ===');
+
+  fetch('/index.html')
+    .then(function(r) { return r.text(); })
+    .then(function(html) {
+      // <script> タグ（src属性なし）の中身を抽出
+      var matches = html.match(/<script>[\s\S]*?<\/script>/g);
+      if (!matches) { p('❌ <script>タグが見つかりません', 'err'); return; }
+
+      p('インラインscriptブロック数: ' + matches.length, matches.length > 0 ? 'ok' : 'warn');
+
+      // 中身を結合
+      var js = matches.map(function(m) {
+        return m.replace(/<script>/g,'').replace(/<\/script>/g,'');
+      }).join('\n');
+
+      p('スクリプト文字数: ' + js.length + ' 文字');
+
+      // 実行前にAFRAMEコンポーネント登録数を記録
+      var beforeCount = Object.keys(AFRAME.components || {}).length;
+      p('実行前 AFRAMEコンポーネント数: ' + beforeCount);
+
+      // evalで実行（エラーはwindow.onerrorで捕捉）
+      try {
+        eval(js);
+        p('✅ eval 完了（例外なし）', 'ok');
+      } catch(e) {
+        p('❌ eval 例外: ' + e.message, 'err');
+        p('   ' + (e.stack || '').split('\n').slice(0,3).join(' | '), 'err');
+      }
+
+      // 実行後チェック
+      setTimeout(function() {
+        p('\n=== 実行後チェック ===');
+        var comps = ['incense-smoke','seasonal-effect'];
+        comps.forEach(function(name) {
+          var ok = !!(AFRAME.components && AFRAME.components[name]);
+          p('  ' + name + ': ' + (ok ? '✅ 登録済み' : '❌ 未登録'), ok ? 'ok' : 'err');
+        });
+
+        var afterCount = Object.keys(AFRAME.components || {}).length;
+        p('実行後 AFRAMEコンポーネント数: ' + afterCount);
+        p('\n診断完了');
+      }, 500);
+    })
+    .catch(function(e) {
+      p('❌ index.html fetch失敗: ' + e.message, 'err');
+    });
+});
+</script>
+</body>
+</html>
